@@ -349,6 +349,24 @@ const TOPIC_LIST = {
 const SUBJ_ICON = {physics:'⚛️', chemistry:'🧪', biology:'🧬', math:'📊'};
 
 /* ---------------------------------------------------------------
+   ZONE TOPIC TIERS
+   Tier-1 zones use the "core" topics; tier-2 zones use the harder
+   "advanced" topics and bias toward harder questions. This spreads
+   the full 825-question bank across the world.
+----------------------------------------------------------------*/
+const ZONE_TOPICS = {
+    // biology
+    forest:     ['cellBiology','organisation','bioenergetics','homeostasis'],
+    deepforest: ['genetics','ecology','evolution','humanBiology'],
+    // chemistry
+    lab:        ['atomicStructure','bonding','reactions','acidsAndBases','metals'],
+    reactor:    ['organicChemistry','ratesOfReaction','electrolysis','quantitativeChemistry'],
+    // physics
+    factory:    ['mechanics','energy','electricity','magnetism','waves'],
+    mainframe:  ['light','atomic','space','thermal','statesOfMatter']
+};
+
+/* ---------------------------------------------------------------
    GAME STATE
 ----------------------------------------------------------------*/
 const G = {
@@ -586,7 +604,7 @@ const MAPS = {
 
     /* ===== FOREST: life-form / biology zone ===== */
     forest:{
-        name:'🌲 The Living Forest', subjectFocus:'biology',
+        name:'🌲 The Living Forest', subjectFocus:'biology', tier:1, diffBias:'easy',
         rows:[
             "##########.###########",   // entry gap at col10 (player lands at 10,1)
             "#....................#",
@@ -600,13 +618,14 @@ const MAPS = {
             "#........PP..........#",
             "#..PPPPPPPPPPPPPP....#",
             "#........PP..........#",
-            "#..##....PP....##....#",
+            "#..##....PP....##D...#",   // D = locked door to deep forest (right side)
             "#........PP..........#",
             "#........PP..........#",
             "##########D###########"   // bottom door -> back to hub
         ],
         doors:[
-            {x:10,y:15, to:'hub', tx:10,ty:1}
+            {x:10,y:15, to:'hub', tx:10,ty:1},
+            {x:17,y:12, to:'deepforest', tx:10,ty:1, lockUntil:'forest'}
         ],
         monsters:[
             {id:'f1', x:5, y:2, face:'🦠', name:'Mutant Microbe', type:'lifeform', maxHP:30, hp:30, diff:'easy',  alive:true},
@@ -617,14 +636,14 @@ const MAPS = {
         ],
         npcs:[
             {id:'f_ranger', x:13,y:13, face:'🧝', name:'Forest Ranger',
-             text:'These creatures are all living things — a biologist has the edge here. Beat the Apex Predator for a big reward!'}
+             text:'These creatures are all living things — a biologist has the edge here. Clear every monster and the 🔒 door to the Deep Forest will open!'}
         ],
         signs:[]
     },
 
     /* ===== LAB: chemistry / elemental zone ===== */
     lab:{
-        name:'🧪 Chemistry Lab', subjectFocus:'chemistry',
+        name:'🧪 Chemistry Lab', subjectFocus:'chemistry', tier:1, diffBias:'easy',
         rows:[
             "######################",
             "#LLLLLLLLLLLLLLLLLLLL#",
@@ -640,11 +659,12 @@ const MAPS = {
             "#L.####.####.####.LL.#",
             "#L................LL.#",
             "#LLLLLLLLLLLLLLLLLLLL#",
-            "#....................#",
+            "#..................LD#",   // locked door to reactor (bottom-right)
             "######################"
         ],
         doors:[
-            {x:0,y:7, to:'hub', tx:1,ty:6}
+            {x:0,y:7, to:'hub', tx:1,ty:6},
+            {x:20,y:14, to:'reactor', tx:1,ty:7, lockUntil:'lab'}
         ],
         monsters:[
             {id:'l1', x:5, y:2, face:'🔥', name:'Flame Sprite',  type:'elemental',maxHP:40, hp:40, diff:'easy',  alive:true},
@@ -655,14 +675,14 @@ const MAPS = {
         ],
         npcs:[
             {id:'l_bond', x:10,y:6, face:'🧪', name:'Dr Catalyst Bond',
-             text:'My home turf! Elemental monsters fear a chemist. Mind the acid pools — they are just decoration, you cannot walk through them.'}
+             text:'My home turf! Elemental monsters fear a chemist. Clear every monster here and the 🔒 door to the Reactor Core will open.'}
         ],
         signs:[]
     },
 
     /* ===== FACTORY: physics / machine zone ===== */
     factory:{
-        name:'⚙️ Physics Factory', subjectFocus:'physics',
+        name:'⚙️ Physics Factory', subjectFocus:'physics', tier:1, diffBias:'easy',
         rows:[
             "######################",
             "#FFFFFFFFFFFFFFFFFFFF#",
@@ -678,11 +698,12 @@ const MAPS = {
             "#F.##.##.##.##.##.FF.#",
             "#F................FF.#",
             "#FFFFFFFFFFFFFFFFFFFF#",
-            "#....................#",
+            "#..................FD#",   // locked door to mainframe (bottom-right)
             "######################"
         ],
         doors:[
-            {x:0,y:7, to:'hub', tx:20,ty:6}
+            {x:0,y:7, to:'hub', tx:20,ty:6},
+            {x:20,y:14, to:'mainframe', tx:1,ty:7, lockUntil:'factory'}
         ],
         monsters:[
             {id:'p1', x:5, y:2, face:'🤖', name:'Rogue Robot',   type:'machine', maxHP:40, hp:40, diff:'easy',  alive:true},
@@ -693,7 +714,7 @@ const MAPS = {
         ],
         npcs:[
             {id:'p_force', x:10,y:6, face:'⚛️', name:'Dr Quantum Force',
-             text:'Gears and circuits everywhere. A physicist dismantles machines with ease. Take down the Mega Machine for the best loot in the factory!'}
+             text:'Gears and circuits everywhere. A physicist dismantles machines with ease. Defeat them all and the 🔒 door to the Mainframe will unlock.'}
         ],
         signs:[]
     },
@@ -720,6 +741,123 @@ const MAPS = {
         npcs:[
             {id:'shop_keep', x:10,y:4, face:'🧞', name:'The Quartermaster', shop:true,
              text:'Welcome to the shop! Spend your hard-earned gold on potions and boosts.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== DEEP FOREST: advanced biology (tier 2) ===== */
+    deepforest:{
+        name:'🌑 The Deep Forest', subjectFocus:'biology', tier:2, diffBias:'hard',
+        rows:[
+            "##########.###########",
+            "#....................#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#..................#.#",
+            "#.PPPPPPPPPPPPPPPPPP.#",
+            "#..................#.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#..................#.#",
+            "#.PPPPPPPPPPPPPPPPPP.#",
+            "#..................#.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.........PP.........#",
+            "##########D###########"   // door back to forest
+        ],
+        doors:[
+            {x:10,y:15, to:'forest', tx:10,ty:1}
+        ],
+        monsters:[
+            {id:'df1', x:2, y:2, face:'🕷️', name:'Venom Stalker',  type:'lifeform', maxHP:70, hp:70, diff:'medium',alive:true},
+            {id:'df2', x:18,y:2, face:'🦂', name:'Gene Scorpion',  type:'lifeform', maxHP:75, hp:75, diff:'medium',alive:true},
+            {id:'df3', x:2, y:8, face:'🐍', name:'DNA Serpent',    type:'lifeform', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'df4', x:18,y:8, face:'🦅', name:'Apex Raptor',    type:'lifeform', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'df5', x:5, y:13,face:'🦖', name:'Primordial Beast',type:'lifeform',maxHP:110,hp:110,diff:'hard',  alive:true},
+            {id:'df6', x:14,y:13,face:'👹', name:'The Mutator',    type:'lifeform', maxHP:130,hp:130,diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'df_elder', x:10,y:5, face:'🧙‍♀️', name:'Forest Elder',
+             text:'You have proven yourself. Here the questions are tougher and the beasts hit harder — every mistake costs dearly. Genetics, ecology, evolution and human biology await.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== REACTOR CORE: advanced chemistry (tier 2) ===== */
+    reactor:{
+        name:'☢️ The Reactor Core', subjectFocus:'chemistry', tier:2, diffBias:'hard',
+        rows:[
+            "######################",
+            "DLLLLLLLLLLLLLLLLLLLL#",   // door back to lab (left)
+            "#LL..............LL..#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL............LL....#",
+            "#LLLLLLLLLLLLLLLL....#",
+            "#LL............LL....#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL............LL....#",
+            "#LLLLLLLLLLLLLLLL....#",
+            "#LL............LL....#",
+            "#LL............LL....#",
+            "#....................#",
+            "######################"
+        ],
+        doors:[
+            {x:0,y:1, to:'lab', tx:1,ty:7}
+        ],
+        monsters:[
+            {id:'r1', x:5, y:2, face:'🧯', name:'Caustic Phantom', type:'elemental',maxHP:70, hp:70, diff:'medium',alive:true},
+            {id:'r2', x:13,y:2, face:'💥', name:'Reaction Bomb',   type:'elemental',maxHP:75, hp:75, diff:'medium',alive:true},
+            {id:'r3', x:5, y:7, face:'⚗️', name:'Catalyst Golem',  type:'elemental',maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'r4', x:13,y:7, face:'🔋', name:'Voltaic Horror',  type:'elemental',maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'r5', x:5, y:13,face:'☣️', name:'Toxic Leviathan', type:'elemental',maxHP:110,hp:110,diff:'hard',  alive:true},
+            {id:'r6', x:14,y:13,face:'🌋', name:'The Meltdown',    type:'elemental',maxHP:130,hp:130,diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'r_sage', x:10,y:6, face:'🧪', name:'Reactor Sage',
+             text:'The core seethes with reactive energy. Organic chemistry, rates, electrolysis and quantitative work are tested here — and the foes strike hard when you slip.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== MAINFRAME: advanced physics (tier 2) ===== */
+    mainframe:{
+        name:'🖥️ The Mainframe', subjectFocus:'physics', tier:2, diffBias:'hard',
+        rows:[
+            "######################",
+            "DFFFFFFFFFFFFFFFFFFFF#",   // door back to factory (left)
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FFFFFFFFFFFFFFFF....#",
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FF............FF....#",
+            "#....................#",
+            "######################"
+        ],
+        doors:[
+            {x:0,y:1, to:'factory', tx:20,ty:7}
+        ],
+        monsters:[
+            {id:'mf1', x:5, y:2, face:'📡', name:'Signal Wraith',  type:'machine', maxHP:70, hp:70, diff:'medium',alive:true},
+            {id:'mf2', x:13,y:2, face:'⚙️', name:'Gear Tyrant',    type:'machine', maxHP:75, hp:75, diff:'medium',alive:true},
+            {id:'mf3', x:5, y:8, face:'🔌', name:'Power Surge',    type:'machine', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'mf4', x:13,y:8, face:'🛸', name:'Quantum Drone',  type:'machine', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'mf5', x:5, y:13,face:'🤖', name:'War Machine',    type:'machine', maxHP:110,hp:110,diff:'hard',  alive:true},
+            {id:'mf6', x:14,y:13,face:'👁️', name:'The Overmind',   type:'machine', maxHP:130,hp:130,diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'mf_ai', x:10,y:6, face:'⚛️', name:'Core AI',
+             text:'You have entered the Mainframe. Light, atomic, space, thermal and states of matter are tested here. The machines are merciless — answer with precision.'}
         ],
         signs:[]
     }
@@ -794,6 +932,17 @@ function isSolid(x,y){
 function doorAt(x,y){
     return doors.find(d=>d.x===x && d.y===y) || null;
 }
+/* Is every monster in a given zone defeated? */
+function zoneCleared(zoneId){
+    const z = MAPS[zoneId];
+    if(!z) return false;
+    const ms = z.monsters||[];
+    return ms.length>0 && ms.every(m=>!m.alive);
+}
+/* A door is locked if it has lockUntil and that zone isn't cleared yet. */
+function doorLocked(door){
+    return !!(door && door.lockUntil && !zoneCleared(door.lockUntil));
+}
 function entityAt(x,y){
     const m = monsters.find(e=>e.alive && e.x===x && e.y===y);
     if(m) return {kind:'monster', e:m};
@@ -849,14 +998,25 @@ function draw(){
             if(t==='~'){ ctx.font=`${TILE-12}px serif`;
                 ctx.fillText('💧', sx+TILE/2, sy+TILE/2+2); }
             if(t==='D'){
-                // pulsing glow so doors stand out
-                const pulse = 0.35 + 0.25*Math.sin(performance.now()/350);
-                ctx.save();
-                ctx.fillStyle=`rgba(255,220,120,${pulse})`;
-                ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
-                ctx.restore();
-                ctx.font=`${TILE-8}px serif`;
-                ctx.fillText('🚪', sx+TILE/2, sy+TILE/2+2); }
+                const dr = doorAt(x,y);
+                const locked = doorLocked(dr);
+                if(locked){
+                    ctx.save();
+                    ctx.fillStyle='rgba(120,40,40,.45)';
+                    ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
+                    ctx.restore();
+                    ctx.font=`${TILE-8}px serif`;
+                    ctx.fillText('🔒', sx+TILE/2, sy+TILE/2+2);
+                } else {
+                    // pulsing glow so doors stand out
+                    const pulse = 0.35 + 0.25*Math.sin(performance.now()/350);
+                    ctx.save();
+                    ctx.fillStyle=`rgba(255,220,120,${pulse})`;
+                    ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
+                    ctx.restore();
+                    ctx.font=`${TILE-8}px serif`;
+                    ctx.fillText('🚪', sx+TILE/2, sy+TILE/2+2);
+                } }
         }
     }
     // signs
@@ -910,9 +1070,18 @@ function tryMove(dir){
         if(ent.kind==='sign'){ talk(ent.e); return; }
     }
 
-    // is the target a door? travel to the linked map.
+    // is the target a door? travel to the linked map (unless locked).
     const door = doorAt(nx,ny);
-    if(door){ travelThroughDoor(door); return; }
+    if(door){
+        if(doorLocked(door)){
+            const need = MAPS[door.lockUntil];
+            const left = (need.monsters||[]).filter(m=>m.alive).length;
+            toast(`🔒 Locked! Defeat all monsters in ${need.name} first (${left} left).`);
+            if(window.soundManager) soundManager.playError && soundManager.playError();
+            return;
+        }
+        travelThroughDoor(door); return;
+    }
 
     if(isSolid(nx,ny)) return;
 
@@ -1006,12 +1175,13 @@ function maybeShowTouch(){
 /* ---------------------------------------------------------------
    QUESTION ENGINE  (reuses your questionBank exactly)
 ----------------------------------------------------------------*/
-function poolForHero(diff, onlySubject){
+function poolForHero(diff, onlySubject, onlyTopics){
     const subs = SCIENTISTS[G.member].subjects;
     let pool=[];
     subs.forEach(sub=>{
-        if(onlySubject && sub!==onlySubject) return;   // zone filter
+        if(onlySubject && sub!==onlySubject) return;   // subject filter
         (G.activeTopics[sub]||[]).forEach(topic=>{
+            if(onlyTopics && !onlyTopics.includes(topic)) return;  // topic-subset filter
             const arr = (questionBank[sub]&&questionBank[sub][topic])||[];
             arr.forEach((q,i)=>{
                 if(!diff || q.difficulty===diff){
@@ -1023,20 +1193,32 @@ function poolForHero(diff, onlySubject){
     return pool;
 }
 function pickQuestion(diff){
-    // Zone focus: if the current map emphasises a subject the hero CAN answer
-    // and has topics selected for, draw from it first.
     const focus = CUR && CUR.subjectFocus;
     const heroSubs = SCIENTISTS[G.member].subjects;
     const focusUsable = focus && heroSubs.includes(focus) && (G.activeTopics[focus]||[]).length>0;
 
-    // ordered list of pools to try (most specific first)
+    // zone's topic subset (tiered zones) and difficulty bias
+    const zoneTopics = (CUR && ZONE_TOPICS[G.currentMap]) || null;
+    const bias = (CUR && CUR.diffBias) || null;   // 'hard' for tier-2 zones
+    // which difficulty to aim for: monster diff, nudged by the zone bias
+    const targetDiff = (bias==='hard') ? 'hard' : diff;
+
+    const filter = a => a.filter(x=>!G.usedQuestions.has(x.id));
     const attempts = [];
     if(focusUsable){
-        attempts.push(()=>poolForHero(diff, focus).filter(x=>!G.usedQuestions.has(x.id)));
-        attempts.push(()=>poolForHero(null, focus).filter(x=>!G.usedQuestions.has(x.id)));
+        // 1. zone subject + zone topics + target difficulty (most specific)
+        attempts.push(()=>filter(poolForHero(targetDiff, focus, zoneTopics)));
+        // 2. zone subject + zone topics, any difficulty
+        attempts.push(()=>filter(poolForHero(null, focus, zoneTopics)));
+        // 3. zone subject (any topic) + requested difficulty
+        attempts.push(()=>filter(poolForHero(diff, focus)));
+        // 4. zone subject, any topic/difficulty
+        attempts.push(()=>filter(poolForHero(null, focus)));
     }
-    attempts.push(()=>poolForHero(diff).filter(x=>!G.usedQuestions.has(x.id)));
-    attempts.push(()=>poolForHero(null).filter(x=>!G.usedQuestions.has(x.id)));
+    // 5. anything the hero can answer at requested difficulty
+    attempts.push(()=>filter(poolForHero(diff)));
+    // 6. anything at all
+    attempts.push(()=>filter(poolForHero(null)));
 
     let pool=[];
     for(const get of attempts){ pool=get(); if(pool.length) break; }
@@ -1132,9 +1314,13 @@ function answer(i){
     } else {
         G.stats.streak=0;
         if(window.soundManager) soundManager.playError && soundManager.playError();
-        const hit = 8 + Math.round(Math.random()*8);
+        // wrong-answer damage scales with question difficulty:
+        // easy stings, hard really bites. Plus a small random spread.
+        const base = {easy:8, medium:16, hard:26}[sel.q.difficulty] || 12;
+        const hit = base + Math.round(Math.random()*6);
         G.hero.hp=Math.max(0,G.hero.hp-hit);
-        toast(`❌ Wrong! You take ${hit} damage`);
+        const sev = sel.q.difficulty==='hard' ? '💥 ' : '';
+        toast(`${sev}❌ Wrong! You take ${hit} damage`);
     }
     updateBattleBars(); updateHUD();
 
