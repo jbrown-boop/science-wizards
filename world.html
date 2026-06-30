@@ -145,8 +145,17 @@ h1{margin:.2em 0;}
 <div class="screen active" id="titleScreen">
     <h1>🧙‍♂️ Science Wizards</h1>
     <p style="color:var(--muted);max-width:520px;">Walk the academy world, find monsters, and defeat them by answering science questions. Choose your scientist:</p>
+    <div id="resumeBanner" style="display:none;background:var(--panel2);border:1px solid var(--accent);
+        border-radius:12px;padding:12px 16px;margin-bottom:8px;max-width:520px;">
+        <div id="resumeText" style="font-size:.9em;margin-bottom:8px;"></div>
+        <button class="btn small good" onclick="resumeAutoSave()">▶ Continue saved game</button>
+        <button class="btn small ghost" onclick="dismissResume()">Start fresh</button>
+    </div>
     <div class="char-pick" id="charPick"></div>
     <button class="btn" onclick="goToTopics()">Next ➜ Choose Topics</button>
+    <p style="color:var(--muted);font-size:.8em;margin-top:14px;">
+        Got a progress code? <a href="#" onclick="openLoadFromTitle();return false;" style="color:var(--accent);">Paste it here</a> to resume.
+    </p>
 </div>
 
 <!-- ============ TOPIC SCREEN ============ -->
@@ -182,6 +191,7 @@ h1{margin:.2em 0;}
         <div id="hudBuffs" style="font-size:.95em;letter-spacing:2px;"></div>
         <div style="font-size:.9em;">💰 <span id="hudGold">100</span></div>
         <button class="btn small ghost" onclick="openDashboard()">📊</button>
+        <button class="btn small ghost" onclick="openSave()" title="Save / load progress">💾</button>
         <button class="btn small ghost" id="muteBtn" onclick="toggleMute()">🔊</button>
     </div>
     <canvas id="gameCanvas"></canvas>
@@ -268,6 +278,37 @@ h1{margin:.2em 0;}
     </div>
 </div>
 
+<!-- ============ SAVE / LOAD MODAL ============ -->
+<div class="modal" id="saveModal">
+    <div class="card" style="max-width:560px;">
+        <h2 style="margin-top:0;">💾 Save &amp; Resume</h2>
+        <p style="color:var(--muted);font-size:.88em;margin-top:0;">
+            Copy your progress code to keep your level, gold and progress. Paste a code next time (on any laptop) to carry on.
+        </p>
+
+        <h3 style="margin:.4em 0 .2em;">Your progress code</h3>
+        <textarea id="saveCode" readonly rows="3"
+            style="width:100%;resize:none;font-family:monospace;font-size:.8em;background:var(--panel2);
+                   color:var(--text);border:1px solid #3a4258;border-radius:8px;padding:8px;"></textarea>
+        <div style="text-align:center;margin:6px 0 14px;">
+            <button class="btn small good" onclick="copySaveCode()">📋 Copy code</button>
+        </div>
+
+        <h3 style="margin:.4em 0 .2em;">Resume from a code</h3>
+        <textarea id="loadCode" rows="3" placeholder="Paste a progress code here…"
+            style="width:100%;resize:none;font-family:monospace;font-size:.8em;background:var(--panel2);
+                   color:var(--text);border:1px solid #3a4258;border-radius:8px;padding:8px;"></textarea>
+        <div style="text-align:center;margin:6px 0;">
+            <button class="btn small" onclick="loadFromCode()">↺ Load this code</button>
+        </div>
+        <div id="loadMsg" style="text-align:center;font-size:.85em;min-height:1.2em;"></div>
+
+        <div style="text-align:center;margin-top:10px;">
+            <button class="btn small ghost" onclick="closeSave()">Close</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- optional sound -->
@@ -322,6 +363,172 @@ const G = {
     battle:null,
     muted:false
 };
+
+/* ===============================================================
+   SAVE / LOAD  — progress codes + browser auto-save backup
+   A code is "SW1." + base64(JSON) + "." + checksum
+===============================================================*/
+const SAVE_VERSION = 1;
+const SAVE_KEY = 'scienceWizardsSave';
+
+/* Gather everything worth persisting into a compact object. */
+function buildSaveData(){
+    // defeated monsters: map id -> array of dead monster ids
+    const cleared = {};
+    for(const id in MAPS){
+        const dead = (MAPS[id].monsters||[]).filter(m=>!m.alive).map(m=>m.id);
+        if(dead.length) cleared[id] = dead;
+    }
+    return {
+        v: SAVE_VERSION,
+        member: G.member,
+        topics: G.activeTopics,
+        hero: {
+            level:G.hero.level, maxHP:G.hero.maxHP, hp:G.hero.hp,
+            xp:G.hero.xp, gold:G.hero.gold,
+            power:G.hero.power||0, shield:!!G.hero.shield
+        },
+        stats: {
+            answered:G.stats.answered, correct:G.stats.correct,
+            bestStreak:G.stats.bestStreak, battlesWon:G.stats.battlesWon,
+            byTopic:G.stats.byTopic
+        },
+        cleared,
+        ts: Date.now()
+    };
+}
+
+/* tiny checksum so a mistyped code is rejected rather than crashing */
+function checksum(str){
+    let h = 0;
+    for(let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) >>> 0; }
+    return h.toString(36);
+}
+
+/* base64 that survives unicode safely */
+function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(str){ return decodeURIComponent(escape(atob(str))); }
+
+function encodeSave(data){
+    const json = JSON.stringify(data);
+    const body = b64encode(json);
+    return 'SW1.' + body + '.' + checksum(body);
+}
+
+/* returns the data object, or throws an Error with a friendly message */
+function decodeSave(code){
+    code = (code||'').trim();
+    if(!code) throw new Error('No code entered.');
+    const parts = code.split('.');
+    if(parts.length!==3 || parts[0]!=='SW1') throw new Error('That does not look like a valid code.');
+    const [, body, sum] = parts;
+    if(checksum(body)!==sum) throw new Error('Code looks corrupted or incomplete — check you copied all of it.');
+    let data;
+    try { data = JSON.parse(b64decode(body)); }
+    catch(e){ throw new Error('Could not read that code.'); }
+    if(!data || data.v!==SAVE_VERSION) throw new Error('That code is from a different version of the game.');
+    return data;
+}
+
+/* apply a decoded save onto the live game state */
+function applySave(data){
+    G.member = data.member || 'physicist';
+    if(data.topics) G.activeTopics = data.topics;
+    Object.assign(G.hero, data.hero||{});
+    if(G.hero.power===undefined) G.hero.power=0;
+    if(G.hero.shield===undefined) G.hero.shield=false;
+    // stats
+    G.stats.answered   = data.stats?.answered||0;
+    G.stats.correct    = data.stats?.correct||0;
+    G.stats.bestStreak = data.stats?.bestStreak||0;
+    G.stats.battlesWon = data.stats?.battlesWon||0;
+    G.stats.byTopic    = data.stats?.byTopic||{};
+    G.stats.streak     = 0;
+    // restore which monsters are dead
+    normaliseMaps();
+    resetAllMaps();
+    const cleared = data.cleared||{};
+    for(const id in cleared){
+        const dead = new Set(cleared[id]);
+        (MAPS[id].monsters||[]).forEach(m=>{ if(dead.has(m.id)) m.alive=false; });
+    }
+}
+
+/* browser auto-save backup (works on GitHub Pages; harmless if blocked) */
+function autoSave(){
+    try { localStorage.setItem(SAVE_KEY, encodeSave(buildSaveData())); }
+    catch(e){ /* storage unavailable — ignore */ }
+}
+function loadAutoSave(){
+    try { return localStorage.getItem(SAVE_KEY); }
+    catch(e){ return null; }
+}
+
+/* ---- Save modal UI ---- */
+function openSave(){
+    const code = encodeSave(buildSaveData());
+    document.getElementById('saveCode').value = code;
+    document.getElementById('loadMsg').textContent = '';
+    document.getElementById('loadCode').value = '';
+    document.getElementById('saveModal').classList.add('active');
+    autoSave();
+    if(window.soundManager) soundManager.playButtonClick && soundManager.playButtonClick();
+}
+function closeSave(){ document.getElementById('saveModal').classList.remove('active'); }
+function copySaveCode(){
+    const ta = document.getElementById('saveCode');
+    ta.select();
+    let ok=false;
+    try { ok = document.execCommand('copy'); } catch(e){}
+    if(navigator.clipboard){ navigator.clipboard.writeText(ta.value).catch(()=>{}); ok=true; }
+    toast(ok? '📋 Code copied — paste it somewhere safe!' : 'Select the code and copy it manually.');
+}
+function loadFromCode(){
+    const msg = document.getElementById('loadMsg');
+    try {
+        const data = decodeSave(document.getElementById('loadCode').value);
+        applySave(data);
+        closeSave();
+        enterWorld(true);
+        const beaten = Object.values(data.cleared||{}).reduce((a,b)=>a+b.length,0);
+        setTimeout(()=>toast(`✅ Resumed: Level ${G.hero.level}, ${G.hero.gold} gold, ${beaten} monsters beaten`), 300);
+        if(window.soundManager) soundManager.playSuccess && soundManager.playSuccess();
+    } catch(e){
+        msg.style.color = 'var(--bad)';
+        msg.textContent = '⚠️ ' + e.message;
+        if(window.soundManager) soundManager.playError && soundManager.playError();
+    }
+}
+
+/* ---- Teacher summary: decode a code into readable stats ----
+   Usable from the browser console:  teacherRead('SW1....')          */
+function teacherRead(code){
+    let data;
+    try { data = decodeSave(code); }
+    catch(e){ console.log('❌ '+e.message); return; }
+    const acc = data.stats.answered ? Math.round(data.stats.correct/data.stats.answered*100) : 0;
+    const sci = (SCIENTISTS[data.member]||{}).name || data.member;
+    const beaten = Object.values(data.cleared||{}).reduce((a,b)=>a+b.length,0);
+    const lines = [];
+    lines.push('=== Science Wizards — student progress ===');
+    lines.push('Scientist : '+sci);
+    lines.push('Level     : '+data.hero.level+'   Gold: '+data.hero.gold);
+    lines.push('Questions : '+data.stats.correct+'/'+data.stats.answered+' correct ('+acc+'%)');
+    lines.push('Best streak: '+data.stats.bestStreak+'   Monsters beaten: '+beaten);
+    lines.push('Saved     : '+new Date(data.ts).toLocaleString());
+    lines.push('--- accuracy by topic ---');
+    const keys = Object.keys(data.stats.byTopic||{}).sort();
+    if(!keys.length) lines.push('(no questions answered yet)');
+    keys.forEach(k=>{
+        const o=data.stats.byTopic[k]; const a=Math.round(o.c/o.t*100);
+        const flag = a<50 ? '  ⚠️ struggling' : a>=80 ? '  ✓ strong' : '';
+        lines.push('  '+k.replace('-',' / ').padEnd(28)+' '+o.c+'/'+o.t+' ('+a+'%)'+flag);
+    });
+    const out = lines.join('\n');
+    console.log(out);
+    return out;
+}
+
 
 /* ---------------------------------------------------------------
    THE WORLD — MULTIPLE CONNECTED MAPS
@@ -963,6 +1170,7 @@ function winBattle(){
     toast(`🏆 Defeated ${m.name}! +${xp} XP, +${gold} gold`);
     awardXP(xp);
     checkAllCleared();
+    autoSave();
 }
 function loseBattle(){
     endBattle(false);
@@ -1076,6 +1284,7 @@ function buyItem(id){
     toast(`✅ Bought ${it.name}!`);
     updateHUD();
     renderShop();
+    autoSave();
 }
 function closeShop(){ document.getElementById('shopModal').classList.remove('active'); }
 
@@ -1231,6 +1440,11 @@ function goToTopics(){ show('topicScreen'); }
 function startWorld(){
     normaliseMaps();
     resetAllMaps();
+    enterWorld(false);
+}
+/* Enter the world screen. If resuming, map/monster state is already restored
+   by applySave(), so we must NOT reset it again. */
+function enterWorld(isResume){
     loadMap('hub');
     // place player in hub courtyard centre
     G.player.x=10; G.player.y=8; G.player.dir='down';
@@ -1240,12 +1454,37 @@ function startWorld(){
     updateHUD();
     updateLocationLabel();
     maybeShowTouch();
-    // hide hint after a bit
     setTimeout(()=>{document.getElementById('hint').style.opacity='0';},6000);
-    // welcome tip: point them at their home zone
-    const homeZone = {physicist:'⚙️ Factory (physics)', chemist:'🧪 Lab (chemistry)', biologist:'🌲 Forest (biology)'}[G.member];
-    setTimeout(()=>toast(`👋 Tip: the ${homeZone} is your strongest area!`), 1200);
+    if(isResume){
+        setTimeout(()=>toast(`▶ Welcome back, ${SCIENTISTS[G.member].name}! Level ${G.hero.level}.`), 1000);
+    } else {
+        const homeZone = {physicist:'⚙️ Factory (physics)', chemist:'🧪 Lab (chemistry)', biologist:'🌲 Forest (biology)'}[G.member];
+        setTimeout(()=>toast(`👋 Tip: the ${homeZone} is your strongest area!`), 1200);
+    }
     requestAnimationFrame(draw);
+}
+
+/* Resume from the browser auto-save backup (title-screen button). */
+function resumeAutoSave(){
+    const code = loadAutoSave();
+    if(!code){ toast('No saved game found.'); return; }
+    try {
+        applySave(decodeSave(code));
+        enterWorld(true);
+    } catch(e){
+        toast('Saved game could not be read — starting fresh.');
+    }
+}
+function dismissResume(){ document.getElementById('resumeBanner').style.display='none'; }
+
+/* Paste a code from the title screen (opens the save modal's load box). */
+function openLoadFromTitle(){
+    // We need the world objects ready for applySave; normalise maps first.
+    normaliseMaps();
+    document.getElementById('saveCode').value = '(enter the world first to generate your own code)';
+    document.getElementById('loadMsg').textContent = '';
+    document.getElementById('loadCode').value = '';
+    document.getElementById('saveModal').classList.add('active');
 }
 
 /* ---------------------------------------------------------------
@@ -1264,6 +1503,18 @@ window.addEventListener('DOMContentLoaded', ()=>{
     buildTopicScreen();
     bindTouch();
     refreshTopicCount();
+    // offer to resume a browser auto-save, if present and readable
+    const saved = loadAutoSave();
+    if(saved){
+        try {
+            const data = decodeSave(saved);
+            const sci = (SCIENTISTS[data.member]||{}).name || data.member;
+            const beaten = Object.values(data.cleared||{}).reduce((a,b)=>a+b.length,0);
+            document.getElementById('resumeText').innerHTML =
+                `Saved game found on this computer:<br><b>${sci}</b> — Level ${data.hero.level}, ${data.hero.gold} gold, ${beaten} monsters beaten.`;
+            document.getElementById('resumeBanner').style.display='block';
+        } catch(e){ /* corrupt backup — ignore */ }
+    }
 });
 </script>
 </body>
