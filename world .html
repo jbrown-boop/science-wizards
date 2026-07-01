@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Science Wizards — Walkable World</title>
+
+<!-- ===== LOAD YOUR EXISTING 825-QUESTION DATABASE ===== -->
+<script>
+window.addEventListener('error', function(e){
+    if (e.filename && e.filename.includes('questions.js')) {
+        document.addEventListener('DOMContentLoaded', function(){
+            alert('questions.js failed to load.\n\nMake sure questions.js is in the SAME folder as this file,\nand open the game through a local server or a web host (not by double-clicking).');
+        });
+    }
+});
+</script>
+<script src="questions.js"></script>
+
+<style>
+:root{
+    --grass:#3a6e3a; --grass2:#356635; --path:#b8946a; --path2:#a8855d;
+    --wall:#4a3f35; --lab:#2b3a4a; --lab2:#26333f; --factory:#3a2f2b;
+    --water:#2e5a8a; --ink:#1a1f2b; --panel:#222838; --panel2:#2c3346;
+    --accent:#4299e1; --good:#48bb78; --bad:#e53e3e; --gold:#ecc94b;
+    --text:#eef2f7; --muted:#9fb0c3;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;height:100%;background:#11141d;color:var(--text);
+    font-family:'Segoe UI',system-ui,Arial,sans-serif;overflow:hidden;}
+
+/* ---------- generic screen ---------- */
+.screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    flex-direction:column;padding:18px;text-align:center;z-index:5;}
+.screen.active{display:flex;}
+h1{margin:.2em 0;}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:12px;
+    padding:14px 22px;font-size:1.05em;font-weight:600;cursor:pointer;margin:6px;
+    transition:transform .08s, filter .15s;}
+.btn:hover{filter:brightness(1.1);}
+.btn:active{transform:scale(.96);}
+.btn.ghost{background:var(--panel2);}
+.btn.good{background:var(--good);}
+.btn.small{padding:9px 14px;font-size:.92em;}
+
+/* ---------- title screen ---------- */
+#titleScreen{background:radial-gradient(circle at 50% 30%,#1d2740,#0d1019);}
+.char-pick{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:18px 0;}
+.char-card{background:var(--panel);border:3px solid transparent;border-radius:16px;
+    padding:16px 14px;width:150px;cursor:pointer;transition:.15s;}
+.char-card:hover{transform:translateY(-3px);}
+.char-card.sel{border-color:var(--gold);background:var(--panel2);}
+.char-card .face{font-size:3em;}
+.char-card .nm{font-weight:700;margin-top:6px;}
+.char-card .sub{font-size:.8em;color:var(--muted);margin-top:4px;}
+
+/* ---------- topic selection ---------- */
+#topicScreen{overflow-y:auto;align-items:stretch;justify-content:flex-start;}
+.topic-wrap{max-width:880px;margin:0 auto;width:100%;}
+.preset-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:10px 0 18px;}
+.subj-block{background:var(--panel);border-radius:14px;padding:12px 14px;margin:10px 0;text-align:left;}
+.subj-block h3{margin:.2em 0 .5em;}
+.topic-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;}
+.topic-chip{background:var(--panel2);border:2px solid #3a4258;border-radius:10px;
+    padding:9px 10px;cursor:pointer;font-size:.9em;display:flex;align-items:center;gap:8px;
+    transition:.12s;}
+.topic-chip.on{border-color:var(--good);background:#2f4a39;}
+.topic-chip .tick{width:16px;height:16px;border-radius:4px;border:2px solid var(--muted);flex:0 0 auto;}
+.topic-chip.on .tick{background:var(--good);border-color:var(--good);}
+
+/* ---------- world / canvas ---------- */
+#worldScreen{display:none;padding:0;}
+#worldScreen.active{display:block;}
+#hud{position:fixed;top:0;left:0;right:0;height:54px;background:rgba(18,22,32,.92);
+    display:flex;align-items:center;gap:12px;padding:0 12px;z-index:6;
+    border-bottom:1px solid #2b3346;}
+#hud .who{font-size:1.6em;}
+#hud .meta{font-size:.82em;line-height:1.25;text-align:left;}
+#hud .bars{flex:1;max-width:240px;}
+.bar{height:9px;background:#1a2030;border-radius:6px;overflow:hidden;margin:3px 0;}
+.bar>div{height:100%;width:100%;transition:width .25s;}
+.bar.hp>div{background:linear-gradient(90deg,#48bb78,#68d391);}
+.bar.xp>div{background:linear-gradient(90deg,#4299e1,#63b3ed);}
+#hud .spacer{flex:1;}
+#hud .lvl{font-weight:700;color:var(--gold);}
+#gameCanvas{position:fixed;top:54px;left:0;display:block;background:#11141d;
+    image-rendering:pixelated;touch-action:none;}
+#hint{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;
+    background:rgba(18,22,32,.9);padding:8px 16px;border-radius:20px;font-size:.85em;
+    color:var(--muted);pointer-events:none;transition:opacity .4s;}
+
+/* ---------- on-screen D-pad ---------- */
+#touch{position:fixed;inset:54px 0 0 0;z-index:6;display:none;pointer-events:none;}
+#touch.show{display:block;}
+.dpad{position:absolute;left:18px;bottom:22px;width:150px;height:150px;pointer-events:auto;}
+.dpad button{position:absolute;width:50px;height:50px;border:none;border-radius:12px;
+    background:rgba(60,72,100,.85);color:#fff;font-size:1.3em;}
+.dpad .up{left:50px;top:0;} .dpad .down{left:50px;top:100px;}
+.dpad .left{left:0;top:50px;} .dpad .right{left:100px;top:50px;}
+.actbtn{position:absolute;right:22px;bottom:34px;width:78px;height:78px;border-radius:50%;
+    border:none;background:rgba(66,153,225,.9);color:#fff;font-size:1.1em;font-weight:700;
+    pointer-events:auto;}
+
+/* ---------- battle / dialogue modal ---------- */
+.modal{position:fixed;inset:0;background:rgba(8,10,16,.82);z-index:10;
+    display:none;align-items:center;justify-content:center;padding:14px;}
+.modal.active{display:flex;}
+.card{background:var(--panel);border-radius:18px;max-width:640px;width:100%;
+    padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:92vh;overflow-y:auto;}
+.battle-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;}
+.combatant{text-align:center;flex:1;}
+.combatant .face{font-size:2.6em;}
+.combatant .nm{font-weight:700;font-size:.9em;}
+.vs{font-size:1.4em;color:var(--muted);}
+.qbox{background:var(--panel2);border-radius:12px;padding:16px;margin:10px 0;}
+.qmeta{font-size:.78em;color:var(--muted);margin-bottom:8px;text-transform:capitalize;}
+.qtext{font-size:1.1em;line-height:1.4;}
+.answers{display:grid;gap:8px;margin-top:8px;}
+.ans{background:var(--panel2);border:2px solid #3a4258;border-radius:10px;
+    padding:12px;text-align:left;cursor:pointer;font-size:.98em;color:var(--text);transition:.1s;}
+.ans:hover{border-color:var(--accent);}
+.ans.correct{background:#27502f;border-color:var(--good);}
+.ans.wrong{background:#5a2630;border-color:var(--bad);}
+.ans:disabled{cursor:default;}
+.explain{background:#1c2433;border-left:4px solid var(--accent);border-radius:8px;
+    padding:12px;margin-top:10px;font-size:.9em;text-align:left;display:none;}
+.explain.show{display:block;}
+.dlg-face{font-size:3em;text-align:center;}
+.dlg-name{text-align:center;font-weight:700;color:var(--gold);}
+.dlg-text{background:var(--panel2);border-radius:12px;padding:16px;margin:12px 0;line-height:1.5;}
+.toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:20;
+    background:var(--panel2);border:1px solid var(--accent);border-radius:12px;
+    padding:12px 18px;font-weight:600;opacity:0;transition:opacity .3s, top .3s;}
+.toast.show{opacity:1;top:74px;}
+
+@media (max-width:560px){
+    .char-card{width:130px;}
+    #hud .meta{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ TITLE SCREEN ============ -->
+<div class="screen active" id="titleScreen">
+    <h1>🧙‍♂️ Science Wizards</h1>
+    <p style="color:var(--muted);max-width:520px;">Walk the academy world, find monsters, and defeat them by answering science questions. Choose your scientist:</p>
+    <div id="resumeBanner" style="display:none;background:var(--panel2);border:1px solid var(--accent);
+        border-radius:12px;padding:12px 16px;margin-bottom:8px;max-width:520px;">
+        <div id="resumeText" style="font-size:.9em;margin-bottom:8px;"></div>
+        <button class="btn small good" onclick="resumeAutoSave()">▶ Continue saved game</button>
+        <button class="btn small ghost" onclick="dismissResume()">Start fresh</button>
+    </div>
+    <div class="char-pick" id="charPick"></div>
+    <button class="btn" onclick="goToTopics()">Next ➜ Choose Topics</button>
+    <p style="color:var(--muted);font-size:.8em;margin-top:14px;">
+        Got a progress code? <a href="#" onclick="openLoadFromTitle();return false;" style="color:var(--accent);">Paste it here</a> to resume.
+    </p>
+</div>
+
+<!-- ============ TOPIC SCREEN ============ -->
+<div class="screen" id="topicScreen">
+    <div class="topic-wrap">
+        <h1>📚 Choose Active Topics</h1>
+        <p style="color:var(--muted);">Only questions from selected topics appear in battles. Pick the topics your class is studying.</p>
+        <div class="preset-row">
+            <button class="btn small ghost" onclick="preset('all')">Select All</button>
+            <button class="btn small ghost" onclick="preset('none')">Clear All</button>
+            <button class="btn small ghost" onclick="preset('physics')">All Physics</button>
+            <button class="btn small ghost" onclick="preset('chemistry')">All Chemistry</button>
+            <button class="btn small ghost" onclick="preset('biology')">All Biology</button>
+        </div>
+        <div id="topicBlocks"></div>
+        <p id="topicCount" style="color:var(--muted);">0 topics selected</p>
+        <button class="btn good" id="startBtn" onclick="startWorld()" disabled>🚀 Enter the World</button>
+        <p style="color:var(--muted);font-size:.82em;">Tip: select at least one topic that matches your chosen scientist (or any Maths topic — all scientists can do Maths).</p>
+    </div>
+</div>
+
+<!-- ============ WORLD SCREEN ============ -->
+<div class="screen" id="worldScreen">
+    <div id="hud">
+        <div class="who" id="hudFace">⚛️</div>
+        <div class="meta" id="hudName">Dr Quantum Force<br><span id="hudLoc" style="color:var(--gold);font-size:.9em;"></span></div>
+        <div class="bars">
+            <div class="bar hp"><div id="hudHP"></div></div>
+            <div class="bar xp"><div id="hudXP"></div></div>
+        </div>
+        <div class="lvl">Lv <span id="hudLvl">1</span></div>
+        <div class="spacer"></div>
+        <div id="hudBuffs" style="font-size:.95em;letter-spacing:2px;"></div>
+        <div style="font-size:.9em;">💰 <span id="hudGold">100</span></div>
+        <button class="btn small ghost" onclick="openDashboard()">📊</button>
+        <button class="btn small ghost" onclick="openGallery()" title="Trophy collection">🏆</button>
+        <button class="btn small ghost" onclick="openSave()" title="Save / load progress">💾</button>
+        <button class="btn small ghost" id="muteBtn" onclick="toggleMute()">🔊</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="hint">Arrow keys / WASD to move • 🚪 doors travel between areas • walk into 👾 to battle, 🧙 to talk</div>
+    <div id="touch">
+        <div class="dpad">
+            <button class="up"   data-dir="up">▲</button>
+            <button class="left" data-dir="left">◀</button>
+            <button class="right"data-dir="right">▶</button>
+            <button class="down" data-dir="down">▼</button>
+        </div>
+        <button class="actbtn" id="actBtn">A</button>
+    </div>
+</div>
+
+<!-- ============ BATTLE MODAL ============ -->
+<div class="modal" id="battleModal">
+    <div class="card">
+        <div class="battle-top">
+            <div class="combatant">
+                <div class="face" id="bHeroFace">⚛️</div>
+                <div class="nm" id="bHeroName">Hero</div>
+                <div class="bar hp" style="margin-top:4px;"><div id="bHeroHP"></div></div>
+            </div>
+            <div class="vs">⚔️</div>
+            <div class="combatant">
+                <div class="face" id="bFoeFace">👾</div>
+                <div class="nm" id="bFoeName">Monster</div>
+                <div class="bar hp" style="margin-top:4px;"><div id="bFoeHP" style="background:linear-gradient(90deg,#e53e3e,#fc8181)"></div></div>
+            </div>
+        </div>
+        <div class="qbox">
+            <div class="qmeta" id="qMeta"></div>
+            <div class="qtext" id="qText">Loading…</div>
+        </div>
+        <div class="answers" id="qAnswers"></div>
+        <div class="explain" id="qExplain"></div>
+        <div style="text-align:center;margin-top:10px;">
+            <button class="btn small" id="nextQBtn" style="display:none;" onclick="nextQuestion()">Continue ➜</button>
+            <button class="btn small ghost" id="fleeBtn" onclick="endBattle(false)">🏃 Flee</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ DIALOGUE MODAL ============ -->
+<div class="modal" id="dlgModal">
+    <div class="card" style="max-width:480px;">
+        <div class="dlg-face" id="dlgFace">🧙</div>
+        <div class="dlg-name" id="dlgName">Sage</div>
+        <div class="dlg-text" id="dlgText"></div>
+        <div style="text-align:center;">
+            <button class="btn small" onclick="closeDlg()">Got it ✔</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ DASHBOARD MODAL ============ -->
+<div class="modal" id="dashModal">
+    <div class="card">
+        <h2 style="margin-top:0;">📊 Progress</h2>
+        <div id="dashBody"></div>
+        <div style="text-align:center;margin-top:12px;">
+            <button class="btn small" onclick="closeDashboard()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ SHOP MODAL ============ -->
+<div class="modal" id="shopModal">
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <span style="font-size:2em;">🧞</span>
+            <div>
+                <h2 style="margin:0;">Supply Shop</h2>
+                <div style="color:var(--muted);font-size:.85em;">The Quartermaster's wares</div>
+            </div>
+            <div style="flex:1;"></div>
+            <div style="font-weight:700;">💰 <span id="shopGold">0</span></div>
+        </div>
+        <div id="shopItems"></div>
+        <div style="text-align:center;margin-top:12px;">
+            <button class="btn small ghost" onclick="closeShop()">Leave shop</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ SAVE / LOAD MODAL ============ -->
+<div class="modal" id="saveModal">
+    <div class="card" style="max-width:560px;">
+        <h2 style="margin-top:0;">💾 Save &amp; Resume</h2>
+        <p style="color:var(--muted);font-size:.88em;margin-top:0;">
+            Copy your progress code to keep your level, gold and progress. Paste a code next time (on any laptop) to carry on.
+        </p>
+
+        <h3 style="margin:.4em 0 .2em;">Your progress code</h3>
+        <textarea id="saveCode" readonly rows="3"
+            style="width:100%;resize:none;font-family:monospace;font-size:.8em;background:var(--panel2);
+                   color:var(--text);border:1px solid #3a4258;border-radius:8px;padding:8px;"></textarea>
+        <div style="text-align:center;margin:6px 0 14px;">
+            <button class="btn small good" onclick="copySaveCode()">📋 Copy code</button>
+        </div>
+
+        <h3 style="margin:.4em 0 .2em;">Resume from a code</h3>
+        <textarea id="loadCode" rows="3" placeholder="Paste a progress code here…"
+            style="width:100%;resize:none;font-family:monospace;font-size:.8em;background:var(--panel2);
+                   color:var(--text);border:1px solid #3a4258;border-radius:8px;padding:8px;"></textarea>
+        <div style="text-align:center;margin:6px 0;">
+            <button class="btn small" onclick="loadFromCode()">↺ Load this code</button>
+        </div>
+        <div id="loadMsg" style="text-align:center;font-size:.85em;min-height:1.2em;"></div>
+
+        <div style="text-align:center;margin-top:10px;">
+            <button class="btn small ghost" onclick="closeSave()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ TROPHY GALLERY MODAL ============ -->
+<div class="modal" id="galleryModal">
+    <div class="card">
+        <h2 style="margin-top:0;">🏆 Trophy Collection</h2>
+        <p style="color:var(--muted);font-size:.85em;margin-top:0;" id="galleryCount">0 of 0 found</p>
+        <div id="galleryGrid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;"></div>
+        <p style="color:var(--muted);font-size:.8em;margin-top:12px;text-align:center;">
+            Answer 10 questions in a row to open a 🌀 secret portal and find more!
+        </p>
+        <div style="text-align:center;margin-top:8px;">
+            <button class="btn small ghost" onclick="closeGallery()">Close</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- optional sound -->
+<script src="sounds.js"></script>
+
+<!-- ===================================================================== -->
+<!-- ===================  WALKABLE WORLD ENGINE  ========================== -->
+<!-- ===================================================================== -->
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------
+   SCIENTISTS  (same mapping as your original game)
+----------------------------------------------------------------*/
+const SCIENTISTS = {
+    physicist:{ face:'⚛️', name:'Dr Quantum Force', subjects:['physics','math'], strongVs:'machine' },
+    chemist:  { face:'🧪', name:'Dr Catalyst Bond', subjects:['chemistry','math'], strongVs:'elemental' },
+    biologist:{ face:'🧬', name:'Dr Darwin Helix',  subjects:['biology','math'],  strongVs:'lifeform' }
+};
+
+/* ---------------------------------------------------------------
+   TOPIC LISTS  (mirror your original startup screen)
+----------------------------------------------------------------*/
+const TOPIC_LIST = {
+    physics:[['mechanics','Mechanics & Forces'],['energy','Energy & Power'],['electricity','Electricity & Circuits'],
+        ['magnetism','Magnetism'],['waves','Waves & Sound'],['light','Light & Optics'],['atomic','Atomic Physics'],
+        ['space','Space Physics'],['thermal','Thermal Physics'],['statesOfMatter','States of Matter']],
+    chemistry:[['atomicStructure','Atomic Structure'],['bonding','Chemical Bonding'],['reactions','Chemical Reactions'],
+        ['acidsAndBases','Acids & Bases'],['metals','Metals & Reactivity'],['organicChemistry','Organic Chemistry'],
+        ['ratesOfReaction','Rates of Reaction'],['electrolysis','Electrolysis'],['quantitativeChemistry','Quantitative Chemistry']],
+    biology:[['cellBiology','Cell Biology'],['organisation','Organisation'],['bioenergetics','Bioenergetics'],
+        ['homeostasis','Homeostasis'],['genetics','Genetics'],['ecology','Ecology'],['evolution','Evolution'],
+        ['humanBiology','Human Biology']],
+    math:[['unitConversions','Unit Conversions'],['equationManipulation','Rearranging Equations'],
+        ['standardForm','Standard Form'],['significantFigures','Significant Figures'],
+        ['graphSkills','Graphs & Charts'],['percentages','Percentages & Ratios']]
+};
+const SUBJ_ICON = {physics:'⚛️', chemistry:'🧪', biology:'🧬', math:'📊'};
+
+/* ---------------------------------------------------------------
+   ZONE TOPIC TIERS
+   Tier-1 zones use the "core" topics; tier-2 zones use the harder
+   "advanced" topics and bias toward harder questions. This spreads
+   the full 825-question bank across the world.
+----------------------------------------------------------------*/
+const ZONE_TOPICS = {
+    // biology
+    forest:     ['cellBiology','organisation','bioenergetics','homeostasis'],
+    deepforest: ['genetics','ecology','evolution','humanBiology'],
+    // chemistry
+    lab:        ['atomicStructure','bonding','reactions','acidsAndBases','metals'],
+    reactor:    ['organicChemistry','ratesOfReaction','electrolysis','quantitativeChemistry'],
+    // physics
+    factory:    ['mechanics','energy','electricity','magnetism','waves'],
+    mainframe:  ['light','atomic','space','thermal','statesOfMatter']
+};
+
+/* ---------------------------------------------------------------
+   GAME STATE
+----------------------------------------------------------------*/
+const G = {
+    member:'physicist',
+    activeTopics:{physics:[],chemistry:[],biology:[],math:[]},
+    hero:{ level:1, hp:100, maxHP:100, xp:0, gold:100, power:0, shield:false },
+    usedQuestions:new Set(),
+    stats:{ answered:0, correct:0, streak:0, bestStreak:0, battlesWon:0, byTopic:{} },
+    collection:[],          // trophy IDs the player has found
+    secretsFound:0,         // how many times they've entered a secret room
+    portal:null,            // {map, x, y} of an active portal, if any
+    returnTo:null,          // where to send the player when they leave a secret room
+    player:{ x:0, y:0, dir:'down', moving:false }, // tile coords
+    pxX:0, pxY:0,                                   // pixel position for smooth move
+    currentMap:null,
+    battle:null,
+    muted:false
+};
+
+/* ---------------------------------------------------------------
+   COLLECTIBLES  — trophies (one-time) + reward items (recurring)
+----------------------------------------------------------------*/
+const TROPHIES = [
+    {id:'relic_atom',    icon:'⚛️', name:'Atom Relic'},
+    {id:'relic_dna',     icon:'🧬', name:'DNA Relic'},
+    {id:'relic_flask',   icon:'⚗️', name:'Alchemist Flask'},
+    {id:'relic_crystal', icon:'💎', name:'Prism Crystal'},
+    {id:'relic_star',    icon:'🌟', name:'Fallen Star'},
+    {id:'relic_gear',    icon:'⚙️', name:'Golden Gear'},
+    {id:'relic_leaf',    icon:'🍃', name:'Ancient Leaf'},
+    {id:'relic_bolt',    icon:'⚡', name:'Storm Bolt'},
+    {id:'relic_moon',    icon:'🌙', name:'Lunar Shard'},
+    {id:'relic_fire',    icon:'🔥', name:'Eternal Flame'},
+    {id:'relic_wave',    icon:'🌊', name:'Wave Pearl'},
+    {id:'relic_crown',   icon:'👑', name:'Scholar\'s Crown'}
+];
+const REWARD_ITEMS = [
+    {id:'gold',  icon:'💰', name:'Gold Cache'},
+    {id:'heal',  icon:'❤️', name:'Healing Font'},
+    {id:'power', icon:'⚔️', name:'Power Shard'}
+];
+
+
+/* ===============================================================
+   SAVE / LOAD  — progress codes + browser auto-save backup
+   A code is "SW1." + base64(JSON) + "." + checksum
+===============================================================*/
+const SAVE_VERSION = 1;
+const SAVE_KEY = 'scienceWizardsSave';
+
+/* Gather everything worth persisting into a compact object. */
+function buildSaveData(){
+    // defeated monsters: map id -> array of dead monster ids
+    const cleared = {};
+    for(const id in MAPS){
+        const dead = (MAPS[id].monsters||[]).filter(m=>!m.alive).map(m=>m.id);
+        if(dead.length) cleared[id] = dead;
+    }
+    return {
+        v: SAVE_VERSION,
+        member: G.member,
+        topics: G.activeTopics,
+        hero: {
+            level:G.hero.level, maxHP:G.hero.maxHP, hp:G.hero.hp,
+            xp:G.hero.xp, gold:G.hero.gold,
+            power:G.hero.power||0, shield:!!G.hero.shield
+        },
+        stats: {
+            answered:G.stats.answered, correct:G.stats.correct,
+            bestStreak:G.stats.bestStreak, battlesWon:G.stats.battlesWon,
+            byTopic:G.stats.byTopic
+        },
+        cleared,
+        collection: G.collection,
+        secretsFound: G.secretsFound||0,
+        ts: Date.now()
+    };
+}
+
+/* tiny checksum so a mistyped code is rejected rather than crashing */
+function checksum(str){
+    let h = 0;
+    for(let i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) >>> 0; }
+    return h.toString(36);
+}
+
+/* base64 that survives unicode safely */
+function b64encode(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64decode(str){ return decodeURIComponent(escape(atob(str))); }
+
+function encodeSave(data){
+    const json = JSON.stringify(data);
+    const body = b64encode(json);
+    return 'SW1.' + body + '.' + checksum(body);
+}
+
+/* returns the data object, or throws an Error with a friendly message */
+function decodeSave(code){
+    code = (code||'').trim();
+    if(!code) throw new Error('No code entered.');
+    const parts = code.split('.');
+    if(parts.length!==3 || parts[0]!=='SW1') throw new Error('That does not look like a valid code.');
+    const [, body, sum] = parts;
+    if(checksum(body)!==sum) throw new Error('Code looks corrupted or incomplete — check you copied all of it.');
+    let data;
+    try { data = JSON.parse(b64decode(body)); }
+    catch(e){ throw new Error('Could not read that code.'); }
+    if(!data || data.v!==SAVE_VERSION) throw new Error('That code is from a different version of the game.');
+    return data;
+}
+
+/* apply a decoded save onto the live game state */
+function applySave(data){
+    G.member = data.member || 'physicist';
+    if(data.topics) G.activeTopics = data.topics;
+    Object.assign(G.hero, data.hero||{});
+    if(G.hero.power===undefined) G.hero.power=0;
+    if(G.hero.shield===undefined) G.hero.shield=false;
+    // stats
+    G.stats.answered   = data.stats?.answered||0;
+    G.stats.correct    = data.stats?.correct||0;
+    G.stats.bestStreak = data.stats?.bestStreak||0;
+    G.stats.battlesWon = data.stats?.battlesWon||0;
+    G.stats.byTopic    = data.stats?.byTopic||{};
+    G.stats.streak     = 0;
+    // collectibles
+    G.collection   = Array.isArray(data.collection) ? data.collection.slice() : [];
+    G.secretsFound = data.secretsFound||0;
+    G.portal = null; G.portalPending = false;
+    // restore which monsters are dead
+    normaliseMaps();
+    resetAllMaps();
+    const cleared = data.cleared||{};
+    for(const id in cleared){
+        const dead = new Set(cleared[id]);
+        (MAPS[id].monsters||[]).forEach(m=>{ if(dead.has(m.id)) m.alive=false; });
+    }
+}
+
+/* browser auto-save backup (works on GitHub Pages; harmless if blocked) */
+function autoSave(){
+    try { localStorage.setItem(SAVE_KEY, encodeSave(buildSaveData())); }
+    catch(e){ /* storage unavailable — ignore */ }
+}
+function loadAutoSave(){
+    try { return localStorage.getItem(SAVE_KEY); }
+    catch(e){ return null; }
+}
+
+/* ---- Save modal UI ---- */
+function openSave(){
+    const code = encodeSave(buildSaveData());
+    document.getElementById('saveCode').value = code;
+    document.getElementById('loadMsg').textContent = '';
+    document.getElementById('loadCode').value = '';
+    document.getElementById('saveModal').classList.add('active');
+    autoSave();
+    if(window.soundManager) soundManager.playButtonClick && soundManager.playButtonClick();
+}
+function closeSave(){ document.getElementById('saveModal').classList.remove('active'); }
+function copySaveCode(){
+    const ta = document.getElementById('saveCode');
+    ta.select();
+    let ok=false;
+    try { ok = document.execCommand('copy'); } catch(e){}
+    if(navigator.clipboard){ navigator.clipboard.writeText(ta.value).catch(()=>{}); ok=true; }
+    toast(ok? '📋 Code copied — paste it somewhere safe!' : 'Select the code and copy it manually.');
+}
+function loadFromCode(){
+    const msg = document.getElementById('loadMsg');
+    try {
+        const data = decodeSave(document.getElementById('loadCode').value);
+        applySave(data);
+        closeSave();
+        enterWorld(true);
+        const beaten = Object.values(data.cleared||{}).reduce((a,b)=>a+b.length,0);
+        setTimeout(()=>toast(`✅ Resumed: Level ${G.hero.level}, ${G.hero.gold} gold, ${beaten} monsters beaten`), 300);
+        if(window.soundManager) soundManager.playSuccess && soundManager.playSuccess();
+    } catch(e){
+        msg.style.color = 'var(--bad)';
+        msg.textContent = '⚠️ ' + e.message;
+        if(window.soundManager) soundManager.playError && soundManager.playError();
+    }
+}
+
+/* ---- Teacher summary: decode a code into readable stats ----
+   Usable from the browser console:  teacherRead('SW1....')          */
+function teacherRead(code){
+    let data;
+    try { data = decodeSave(code); }
+    catch(e){ console.log('❌ '+e.message); return; }
+    const acc = data.stats.answered ? Math.round(data.stats.correct/data.stats.answered*100) : 0;
+    const sci = (SCIENTISTS[data.member]||{}).name || data.member;
+    const beaten = Object.values(data.cleared||{}).reduce((a,b)=>a+b.length,0);
+    const lines = [];
+    lines.push('=== Science Wizards — student progress ===');
+    lines.push('Scientist : '+sci);
+    lines.push('Level     : '+data.hero.level+'   Gold: '+data.hero.gold);
+    lines.push('Questions : '+data.stats.correct+'/'+data.stats.answered+' correct ('+acc+'%)');
+    lines.push('Best streak: '+data.stats.bestStreak+'   Monsters beaten: '+beaten);
+    lines.push('Trophies  : '+((data.collection||[]).length)+'/'+TROPHIES.length+'   Secret rooms found: '+(data.secretsFound||0));
+    lines.push('Saved     : '+new Date(data.ts).toLocaleString());
+    lines.push('--- accuracy by topic ---');
+    const keys = Object.keys(data.stats.byTopic||{}).sort();
+    if(!keys.length) lines.push('(no questions answered yet)');
+    keys.forEach(k=>{
+        const o=data.stats.byTopic[k]; const a=Math.round(o.c/o.t*100);
+        const flag = a<50 ? '  ⚠️ struggling' : a>=80 ? '  ✓ strong' : '';
+        lines.push('  '+k.replace('-',' / ').padEnd(28)+' '+o.c+'/'+o.t+' ('+a+'%)'+flag);
+    });
+    const out = lines.join('\n');
+    console.log(out);
+    return out;
+}
+
+
+/* ---------------------------------------------------------------
+   THE WORLD — MULTIPLE CONNECTED MAPS
+   Legend:  . grass   # wall/tree   ~ water   P path
+            L lab floor   F factory floor   D door (walk in to travel)
+   Each map row must be exactly its map's width.
+   Doors are listed per-map: {x,y, to:'mapId', tx,ty} teleports player.
+----------------------------------------------------------------*/
+const TILE = 40;
+
+const MAPS = {
+    /* ===== HUB: the Academy courtyard. Doors lead out to areas. ===== */
+    hub:{
+        name:'🏛️ Academy Courtyard', subjectFocus:null,
+        rows:[
+            "##########D###########",   // top door -> forest
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "DPPPPPPPPPPPPPPPPPPPPD",   // left door -> lab, right door -> factory
+            "DPPPPPPPPPPPPPPPPPPPPD",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "#........PPPP........#",
+            "##########D###########"    // bottom door -> shop
+        ],
+        doors:[
+            {x:10,y:0,  to:'forest',  tx:10,ty:1},
+            {x:0, y:6,  to:'lab',     tx:20,ty:7},
+            {x:0, y:7,  to:'lab',     tx:20,ty:8},
+            {x:21,y:6,  to:'factory', tx:1, ty:7},
+            {x:21,y:7,  to:'factory', tx:1, ty:8},
+            {x:10,y:15, to:'shop',    tx:6, ty:1}
+        ],
+        monsters:[],
+        npcs:[
+            {id:'h_newton', x:9, y:3, face:'🧙‍♂️', name:'Professor Newton',
+             text:'Welcome to the Academy courtyard! Walk through the doors: 🌲 forest above, 🧪 lab to the left, ⚙️ factory to the right, and a 🛒 shop below. Each area tests different topics.'},
+            {id:'h_curie', x:12,y:3, face:'🧙‍♀️', name:'Dr Curie',
+             text:'Play to your strengths: physicists crush 🤖 machines, chemists scorch 🔥 elementals, biologists out-think 🦠 life-forms. Maths questions can appear for everyone.'}
+        ],
+        signs:[
+            {id:'sg_top',  x:12,y:1, face:'🌲', name:'To the Forest',  text:'North (through the 🚪): the Living Forest. Biology & life-form monsters dwell here.'},
+            {id:'sg_left', x:2, y:5, face:'🧪', name:'To the Lab',     text:'West (through the 🚪): the Chemistry Lab. Chemistry questions and elemental foes.'},
+            {id:'sg_right',x:19,y:5,face:'⚙️', name:'To the Factory',  text:'East (through the 🚪): the Physics Factory. Physics questions and machine foes.'},
+            {id:'sg_bot',  x:12,y:14,face:'🛒', name:'To the Shop',     text:'South (through the 🚪): the Supply Shop. Spend your gold on potions and boosts.'}
+        ]
+    },
+
+    /* ===== FOREST: life-form / biology zone ===== */
+    forest:{
+        name:'🌲 The Living Forest', subjectFocus:'biology', tier:1, diffBias:'easy',
+        rows:[
+            "##########.###########",   // entry gap at col10 (player lands at 10,1)
+            "#....................#",
+            "#..##....PP....##....#",
+            "#..##....PP....##....#",
+            "#........PP..........#",
+            "#..PPPPPPPPPPPPPP....#",
+            "#........PP..........#",
+            "#..##....PP....##....#",
+            "#..##....PP....##....#",
+            "#........PP..........#",
+            "#..PPPPPPPPPPPPPP....#",
+            "#........PP..........#",
+            "#..##....PP....##D...#",   // D = locked door to deep forest (right side)
+            "#........PP..........#",
+            "#........PP..........#",
+            "##########D###########"   // bottom door -> back to hub
+        ],
+        doors:[
+            {x:10,y:15, to:'hub', tx:10,ty:1},
+            {x:17,y:12, to:'deepforest', tx:10,ty:1, lockUntil:'forest'}
+        ],
+        monsters:[
+            {id:'f1', x:5, y:2, face:'🦠', name:'Mutant Microbe', type:'lifeform', maxHP:30, hp:30, diff:'easy',  alive:true},
+            {id:'f2', x:13,y:2, face:'🐛', name:'Gene Grub',      type:'lifeform', maxHP:35, hp:35, diff:'easy',  alive:true},
+            {id:'f3', x:5, y:7, face:'🧟', name:'Cell Zombie',    type:'lifeform', maxHP:50, hp:50, diff:'medium',alive:true},
+            {id:'f4', x:13,y:7, face:'🦎', name:'Evolution Lizard',type:'lifeform',maxHP:60, hp:60, diff:'medium',alive:true},
+            {id:'f5', x:5, y:13,face:'🐉', name:'Apex Predator',  type:'lifeform', maxHP:80, hp:80, diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'f_ranger', x:13,y:13, face:'🧝', name:'Forest Ranger',
+             text:'These creatures are all living things — a biologist has the edge here. Clear every monster and the 🔒 door to the Deep Forest will open!'}
+        ],
+        signs:[]
+    },
+
+    /* ===== LAB: chemistry / elemental zone ===== */
+    lab:{
+        name:'🧪 Chemistry Lab', subjectFocus:'chemistry', tier:1, diffBias:'easy',
+        rows:[
+            "######################",
+            "#LLLLLLLLLLLLLLLLLLLL#",
+            "#L................LL.#",
+            "#L.####.####.####.LL.#",
+            "#L.#..#.#..#.#..#.LL.#",
+            "#L.####.####.####.LL.#",
+            "#L................LL.#",
+            "DLLLLLLLLLLLLLLLLLLLL#",   // left door -> hub
+            "#L................LL.#",
+            "#L.####.####.####.LL.#",
+            "#L.#~~#.#~~#.#~~#.LL.#",
+            "#L.####.####.####.LL.#",
+            "#L................LL.#",
+            "#LLLLLLLLLLLLLLLLLLLL#",
+            "#..................LD#",   // locked door to reactor (bottom-right)
+            "######################"
+        ],
+        doors:[
+            {x:0,y:7, to:'hub', tx:1,ty:6},
+            {x:20,y:14, to:'reactor', tx:1,ty:7, lockUntil:'lab'}
+        ],
+        monsters:[
+            {id:'l1', x:5, y:2, face:'🔥', name:'Flame Sprite',  type:'elemental',maxHP:40, hp:40, diff:'easy',  alive:true},
+            {id:'l2', x:14,y:2, face:'💧', name:'Acid Blob',     type:'elemental',maxHP:45, hp:45, diff:'easy',  alive:true},
+            {id:'l3', x:5, y:8, face:'⚗️', name:'Reagent Wraith',type:'elemental',maxHP:55, hp:55, diff:'medium',alive:true},
+            {id:'l4', x:14,y:8, face:'⚡', name:'Volt Wraith',   type:'elemental',maxHP:60, hp:60, diff:'medium',alive:true},
+            {id:'l5', x:10,y:12,face:'☢️', name:'Reaction Titan',type:'elemental',maxHP:85, hp:85, diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'l_bond', x:10,y:6, face:'🧪', name:'Dr Catalyst Bond',
+             text:'My home turf! Elemental monsters fear a chemist. Clear every monster here and the 🔒 door to the Reactor Core will open.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== FACTORY: physics / machine zone ===== */
+    factory:{
+        name:'⚙️ Physics Factory', subjectFocus:'physics', tier:1, diffBias:'easy',
+        rows:[
+            "######################",
+            "#FFFFFFFFFFFFFFFFFFFF#",
+            "#F................FF.#",
+            "#F.##.##.##.##.##.FF.#",
+            "#F................FF.#",
+            "#F.##.##.##.##.##.FF.#",
+            "#F................FF.#",
+            "DFFFFFFFFFFFFFFFFFFFF#",   // left door -> hub
+            "#F................FF.#",
+            "#F.##.##.##.##.##.FF.#",
+            "#F................FF.#",
+            "#F.##.##.##.##.##.FF.#",
+            "#F................FF.#",
+            "#FFFFFFFFFFFFFFFFFFFF#",
+            "#..................FD#",   // locked door to mainframe (bottom-right)
+            "######################"
+        ],
+        doors:[
+            {x:0,y:7, to:'hub', tx:20,ty:6},
+            {x:20,y:14, to:'mainframe', tx:1,ty:7, lockUntil:'factory'}
+        ],
+        monsters:[
+            {id:'p1', x:5, y:2, face:'🤖', name:'Rogue Robot',   type:'machine', maxHP:40, hp:40, diff:'easy',  alive:true},
+            {id:'p2', x:14,y:2, face:'🔧', name:'Wrench Wraith', type:'machine', maxHP:45, hp:45, diff:'easy',  alive:true},
+            {id:'p3', x:5, y:9, face:'👾', name:'Glitch Beast',  type:'machine', maxHP:55, hp:55, diff:'medium',alive:true},
+            {id:'p4', x:14,y:9, face:'🛰️', name:'Orbit Sentinel',type:'machine', maxHP:60, hp:60, diff:'medium',alive:true},
+            {id:'p5', x:10,y:12,face:'💀', name:'Mega Machine',  type:'machine', maxHP:85, hp:85, diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'p_force', x:10,y:6, face:'⚛️', name:'Dr Quantum Force',
+             text:'Gears and circuits everywhere. A physicist dismantles machines with ease. Defeat them all and the 🔒 door to the Mainframe will unlock.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== SHOP: spend gold ===== */
+    shop:{
+        name:'🛒 Supply Shop', subjectFocus:null,
+        rows:[
+            "##########D###########",   // top door -> hub
+            "#....................#",
+            "#..PPPPPPPPPPPPPPPP..#",
+            "#..P............P....#",
+            "#..P............P....#",
+            "#..P............P....#",
+            "#..P............P....#",
+            "#..PPPPPPPPPPPPPPPP..#",
+            "#....................#",
+            "######################"
+        ],
+        doors:[
+            {x:10,y:0, to:'hub', tx:10,ty:14}
+        ],
+        monsters:[],
+        npcs:[
+            {id:'shop_keep', x:10,y:4, face:'🧞', name:'The Quartermaster', shop:true,
+             text:'Welcome to the shop! Spend your hard-earned gold on potions and boosts.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== DEEP FOREST: advanced biology (tier 2) ===== */
+    deepforest:{
+        name:'🌑 The Deep Forest', subjectFocus:'biology', tier:2, diffBias:'hard',
+        rows:[
+            "##########.###########",
+            "#....................#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#..................#.#",
+            "#.PPPPPPPPPPPPPPPPPP.#",
+            "#..................#.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#..................#.#",
+            "#.PPPPPPPPPPPPPPPPPP.#",
+            "#..................#.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.PP..PP..PP..PP..PP.#",
+            "#.........PP.........#",
+            "##########D###########"   // door back to forest
+        ],
+        doors:[
+            {x:10,y:15, to:'forest', tx:10,ty:1}
+        ],
+        monsters:[
+            {id:'df1', x:2, y:2, face:'🕷️', name:'Venom Stalker',  type:'lifeform', maxHP:70, hp:70, diff:'medium',alive:true},
+            {id:'df2', x:18,y:2, face:'🦂', name:'Gene Scorpion',  type:'lifeform', maxHP:75, hp:75, diff:'medium',alive:true},
+            {id:'df3', x:2, y:8, face:'🐍', name:'DNA Serpent',    type:'lifeform', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'df4', x:18,y:8, face:'🦅', name:'Apex Raptor',    type:'lifeform', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'df5', x:5, y:13,face:'🦖', name:'Primordial Beast',type:'lifeform',maxHP:110,hp:110,diff:'hard',  alive:true},
+            {id:'df6', x:14,y:13,face:'👹', name:'The Mutator',    type:'lifeform', maxHP:130,hp:130,diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'df_elder', x:10,y:5, face:'🧙‍♀️', name:'Forest Elder',
+             text:'You have proven yourself. Here the questions are tougher and the beasts hit harder — every mistake costs dearly. Genetics, ecology, evolution and human biology await.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== REACTOR CORE: advanced chemistry (tier 2) ===== */
+    reactor:{
+        name:'☢️ The Reactor Core', subjectFocus:'chemistry', tier:2, diffBias:'hard',
+        rows:[
+            "######################",
+            "DLLLLLLLLLLLLLLLLLLLL#",   // door back to lab (left)
+            "#LL..............LL..#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL............LL....#",
+            "#LLLLLLLLLLLLLLLL....#",
+            "#LL............LL....#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL.~~~~..~~~~..LL...#",
+            "#LL............LL....#",
+            "#LLLLLLLLLLLLLLLL....#",
+            "#LL............LL....#",
+            "#LL............LL....#",
+            "#....................#",
+            "######################"
+        ],
+        doors:[
+            {x:0,y:1, to:'lab', tx:1,ty:7}
+        ],
+        monsters:[
+            {id:'r1', x:5, y:2, face:'🧯', name:'Caustic Phantom', type:'elemental',maxHP:70, hp:70, diff:'medium',alive:true},
+            {id:'r2', x:13,y:2, face:'💥', name:'Reaction Bomb',   type:'elemental',maxHP:75, hp:75, diff:'medium',alive:true},
+            {id:'r3', x:5, y:7, face:'⚗️', name:'Catalyst Golem',  type:'elemental',maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'r4', x:13,y:7, face:'🔋', name:'Voltaic Horror',  type:'elemental',maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'r5', x:5, y:13,face:'☣️', name:'Toxic Leviathan', type:'elemental',maxHP:110,hp:110,diff:'hard',  alive:true},
+            {id:'r6', x:14,y:13,face:'🌋', name:'The Meltdown',    type:'elemental',maxHP:130,hp:130,diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'r_sage', x:10,y:6, face:'🧪', name:'Reactor Sage',
+             text:'The core seethes with reactive energy. Organic chemistry, rates, electrolysis and quantitative work are tested here — and the foes strike hard when you slip.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== MAINFRAME: advanced physics (tier 2) ===== */
+    mainframe:{
+        name:'🖥️ The Mainframe', subjectFocus:'physics', tier:2, diffBias:'hard',
+        rows:[
+            "######################",
+            "DFFFFFFFFFFFFFFFFFFFF#",   // door back to factory (left)
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FFFFFFFFFFFFFFFF....#",
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FF.##.##.##.##FF....#",
+            "#FF............FF....#",
+            "#FF............FF....#",
+            "#....................#",
+            "######################"
+        ],
+        doors:[
+            {x:0,y:1, to:'factory', tx:20,ty:7}
+        ],
+        monsters:[
+            {id:'mf1', x:5, y:2, face:'📡', name:'Signal Wraith',  type:'machine', maxHP:70, hp:70, diff:'medium',alive:true},
+            {id:'mf2', x:13,y:2, face:'⚙️', name:'Gear Tyrant',    type:'machine', maxHP:75, hp:75, diff:'medium',alive:true},
+            {id:'mf3', x:5, y:8, face:'🔌', name:'Power Surge',    type:'machine', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'mf4', x:13,y:8, face:'🛸', name:'Quantum Drone',  type:'machine', maxHP:90, hp:90, diff:'hard',  alive:true},
+            {id:'mf5', x:5, y:13,face:'🤖', name:'War Machine',    type:'machine', maxHP:110,hp:110,diff:'hard',  alive:true},
+            {id:'mf6', x:14,y:13,face:'👁️', name:'The Overmind',   type:'machine', maxHP:130,hp:130,diff:'hard',  alive:true}
+        ],
+        npcs:[
+            {id:'mf_ai', x:10,y:6, face:'⚛️', name:'Core AI',
+             text:'You have entered the Mainframe. Light, atomic, space, thermal and states of matter are tested here. The machines are merciless — answer with precision.'}
+        ],
+        signs:[]
+    },
+
+    /* ===== SECRET ROOM: reached via streak portals (no monsters) ===== */
+    secret:{
+        name:'✨ Secret Vault', subjectFocus:null,
+        rows:[
+            "############D#########",   // top door -> back to where you came from
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "#....................#",
+            "######################"
+        ],
+        doors:[],   // exit door is set dynamically when entering (returnTo)
+        monsters:[],
+        npcs:[
+            {id:'vault_keeper', x:10,y:2, face:'🧞‍♂️', name:'Vault Keeper',
+             text:'You reached the Secret Vault by answering 10 in a row! Grab the treasures — trophies are yours forever, and the rewards refill your strength. The 🚪 door above leads back.'}
+        ],
+        signs:[],
+        items:[]    // collectibles placed here dynamically on entry
+    }
+};
+
+/* Active-map working state (populated by loadMap) */
+let CUR = null;          // the active map object
+let MAP_W = 22, MAP_H = 16;
+let monsters = [], npcs = [], signs = [], doors = [], items = [];
+
+/* Normalise every map's rows to a rectangle and remember its size.
+   This guards against hand-typed rows of the wrong length. */
+function normaliseMaps(){
+    for(const id in MAPS){
+        const m = MAPS[id];
+        const w = Math.max(...m.rows.map(r=>r.length));
+        m.rows = m.rows.map(r=>{
+            if(r.length < w) r = r + '#'.repeat(w - r.length); // pad short rows with wall
+            return r.slice(0, w);
+        });
+        m.w = w; m.h = m.rows.length;
+        // Deep-clone the entity arrays into fresh "alive" copies stored on the map,
+        // so a fresh game resets them. We keep the originals as templates.
+        m._mTemplate = JSON.parse(JSON.stringify(m.monsters||[]));
+    }
+}
+
+/* Build / reset every map's monsters to full health & alive. */
+function resetAllMaps(){
+    for(const id in MAPS){
+        MAPS[id].monsters = JSON.parse(JSON.stringify(MAPS[id]._mTemplate));
+    }
+}
+
+/* Load a map into the active working state. */
+function loadMap(id){
+    CUR = MAPS[id];
+    G.currentMap = id;
+    MAP_W = CUR.w; MAP_H = CUR.h;
+    monsters = CUR.monsters;          // live reference (so kills persist)
+    npcs = CUR.npcs || [];
+    signs = CUR.signs || [];
+    doors = CUR.doors || [];
+    items = CUR.items || [];          // collectibles (secret room only)
+}
+
+/* ---------------------------------------------------------------
+   CANVAS SETUP
+----------------------------------------------------------------*/
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let VIEW_W=0, VIEW_H=0, camX=0, camY=0;
+
+function resizeCanvas(){
+    VIEW_W = window.innerWidth;
+    VIEW_H = window.innerHeight - 54;
+    canvas.width = VIEW_W;
+    canvas.height = VIEW_H;
+}
+window.addEventListener('resize', resizeCanvas);
+
+/* ---------------------------------------------------------------
+   TILE HELPERS
+----------------------------------------------------------------*/
+function tileAt(x,y){
+    if(x<0||y<0||x>=MAP_W||y>=MAP_H) return '#';
+    return CUR.rows[y][x];
+}
+function isSolid(x,y){
+    const t = tileAt(x,y);
+    return t==='#' || t==='~';
+}
+function doorAt(x,y){
+    return doors.find(d=>d.x===x && d.y===y) || null;
+}
+/* Is every monster in a given zone defeated? */
+function zoneCleared(zoneId){
+    const z = MAPS[zoneId];
+    if(!z) return false;
+    const ms = z.monsters||[];
+    return ms.length>0 && ms.every(m=>!m.alive);
+}
+/* A door is locked if it has lockUntil and that zone isn't cleared yet. */
+function doorLocked(door){
+    return !!(door && door.lockUntil && !zoneCleared(door.lockUntil));
+}
+function entityAt(x,y){
+    // active streak portal (only on the map where it spawned)
+    if(G.portal && G.portal.map===G.currentMap && G.portal.x===x && G.portal.y===y)
+        return {kind:'portal', e:G.portal};
+    // collectible items (secret room)
+    const it = items.find(e=>!e.taken && e.x===x && e.y===y);
+    if(it) return {kind:'item', e:it};
+    const m = monsters.find(e=>e.alive && e.x===x && e.y===y);
+    if(m) return {kind:'monster', e:m};
+    const n = npcs.find(e=>e.x===x && e.y===y);
+    if(n) return {kind:'npc', e:n};
+    const s = signs.find(e=>e.x===x && e.y===y);
+    if(s) return {kind:'sign', e:s};
+    return null;
+}
+
+/* ---------------------------------------------------------------
+   SECRET ROOMS  — spawned by a 10-correct streak
+----------------------------------------------------------------*/
+const STREAK_TARGET = 10;
+
+/* Find a free walkable, unoccupied tile in the current zone for a portal. */
+function findFreeTile(){
+    const candidates=[];
+    for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
+        if(isSolid(x,y)) continue;
+        if(tileAt(x,y)==='D') continue;
+        if(x===G.player.x && y===G.player.y) continue;
+        if(entityAt(x,y)) continue;
+        candidates.push([x,y]);
+    }
+    if(!candidates.length) return null;
+    return candidates[Math.floor(Math.random()*candidates.length)];
+}
+
+/* Spawn a portal in the current zone (called when a streak hits the target). */
+function spawnPortal(){
+    // don't spawn in the secret room itself
+    if(G.currentMap==='secret') return;
+    const spot = findFreeTile();
+    if(!spot) return;
+    G.portal = {map:G.currentMap, x:spot[0], y:spot[1]};
+    toast('🌀 A secret portal has appeared! Find it and step in.');
+    if(window.soundManager) soundManager.playCosmicDiscovery && soundManager.playCosmicDiscovery();
+}
+
+/* Enter the secret room, remembering where to return. */
+function enterSecret(){
+    G.returnTo = {map:G.currentMap, x:G.player.x, y:G.player.y};
+    G.portal = null;                 // consume the portal
+    G.secretsFound = (G.secretsFound||0) + 1;
+    buildSecretRoom();
+    loadMap('secret');
+    // exit door leads back to where we came from
+    MAPS.secret.doors = [{x:12,y:0, to:G.returnTo.map, tx:G.returnTo.x, ty:G.returnTo.y}];
+    doors = MAPS.secret.doors;
+    G.player.x=10; G.player.y=10; G.player.dir='up';
+    G.pxX=G.player.x*TILE; G.pxY=G.player.y*TILE;
+    updateLocationLabel();
+    if(window.soundManager) soundManager.playCosmicDiscovery && soundManager.playCosmicDiscovery();
+    toast('✨ You found the Secret Vault!');
+}
+
+/* Populate the secret room with collectibles: 1 trophy (if any left) + rewards. */
+function buildSecretRoom(){
+    const spots = [[4,4],[8,4],[12,4],[16,4],[4,7],[8,7],[12,7],[16,7]];
+    // shuffle
+    for(let i=spots.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[spots[i],spots[j]]=[spots[j],spots[i]];}
+    const placed=[];
+    // one un-found trophy, if any remain
+    const remaining = TROPHIES.filter(t=>!G.collection.includes(t.id));
+    if(remaining.length){
+        const t = remaining[Math.floor(Math.random()*remaining.length)];
+        placed.push({kind:'trophy', id:t.id, icon:t.icon, name:t.name, x:spots[0][0], y:spots[0][1], taken:false});
+    }
+    // 2-3 reward items
+    const nRewards = 2 + Math.floor(Math.random()*2);
+    for(let i=0;i<nRewards;i++){
+        const r = REWARD_ITEMS[Math.floor(Math.random()*REWARD_ITEMS.length)];
+        const spot = spots[placed.length];
+        if(!spot) break;
+        placed.push({kind:'reward', id:r.id, icon:r.icon, name:r.name, x:spot[0], y:spot[1], taken:false});
+    }
+    MAPS.secret.items = placed;
+    items = placed;
+}
+
+/* Pick up a collectible when walked into. */
+function pickUpItem(it){
+    it.taken = true;
+    if(it.kind==='trophy'){
+        if(!G.collection.includes(it.id)) G.collection.push(it.id);
+        toast(`🏆 Trophy found: ${it.name}! (${G.collection.length}/${TROPHIES.length})`);
+        if(window.soundManager) soundManager.playVictory && soundManager.playVictory();
+    } else {
+        // reward effects
+        if(it.id==='gold'){ const g=30+Math.floor(Math.random()*40); G.hero.gold+=g; toast(`💰 +${g} gold!`); }
+        else if(it.id==='heal'){ G.hero.hp=G.hero.maxHP; toast('❤️ Fully healed!'); }
+        else if(it.id==='power'){ G.hero.power=(G.hero.power||0)+1; toast('⚔️ Power +1!'); }
+        if(window.soundManager) soundManager.playSuccess && soundManager.playSuccess();
+    }
+    updateHUD();
+    autoSave();
+}
+
+/* ---------------------------------------------------------------
+   RENDER LOOP
+----------------------------------------------------------------*/
+const TILE_COLORS = {
+    '.':['#3a6e3a','#356635'], 'P':['#b8946a','#a8855d'], '#':['#2d2620','#262019'],
+    '~':['#2e5a8a','#27497a'], 'L':['#2b3a4a','#26333f'], 'F':['#3a2f2b','#332925'],
+    'D':['#7a5a32','#6b4e2b']
+};
+
+function draw(){
+    // camera centred on player pixel pos
+    camX = Math.round(G.pxX - VIEW_W/2 + TILE/2);
+    camY = Math.round(G.pxY - VIEW_H/2 + TILE/2);
+    const maxCamX = MAP_W*TILE - VIEW_W;
+    const maxCamY = MAP_H*TILE - VIEW_H;
+    if(MAP_W*TILE < VIEW_W) camX = (MAP_W*TILE - VIEW_W)/2;
+    else camX = Math.max(0, Math.min(camX, maxCamX));
+    if(MAP_H*TILE < VIEW_H) camY = (MAP_H*TILE - VIEW_H)/2;
+    else camY = Math.max(0, Math.min(camY, maxCamY));
+
+    ctx.clearRect(0,0,VIEW_W,VIEW_H);
+
+    // does this map use trees for walls? (outdoor maps only)
+    const treeWalls = (G.currentMap==='hub' || G.currentMap==='forest' || G.currentMap==='shop');
+
+    // tiles
+    const x0 = Math.max(0, Math.floor(camX/TILE));
+    const y0 = Math.max(0, Math.floor(camY/TILE));
+    const x1 = Math.min(MAP_W, Math.ceil((camX+VIEW_W)/TILE));
+    const y1 = Math.min(MAP_H, Math.ceil((camY+VIEW_H)/TILE));
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(let y=y0;y<y1;y++){
+        for(let x=x0;x<x1;x++){
+            const t = tileAt(x,y);
+            const c = TILE_COLORS[t] || TILE_COLORS['.'];
+            const sx = x*TILE - camX, sy = y*TILE - camY;
+            ctx.fillStyle = ((x+y)%2===0)? c[0]:c[1];
+            ctx.fillRect(sx,sy,TILE,TILE);
+            if(t==='#' && treeWalls){ ctx.font=`${TILE-6}px serif`;
+                ctx.fillText('🌳', sx+TILE/2, sy+TILE/2+2); }
+            else if(t==='#'){ // indoor wall: subtle brick edge
+                ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(sx,sy,TILE,3); ctx.fillRect(sx,sy,3,TILE); }
+            if(t==='~'){ ctx.font=`${TILE-12}px serif`;
+                ctx.fillText('💧', sx+TILE/2, sy+TILE/2+2); }
+            if(t==='D'){
+                const dr = doorAt(x,y);
+                const locked = doorLocked(dr);
+                if(locked){
+                    ctx.save();
+                    ctx.fillStyle='rgba(120,40,40,.45)';
+                    ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
+                    ctx.restore();
+                    ctx.font=`${TILE-8}px serif`;
+                    ctx.fillText('🔒', sx+TILE/2, sy+TILE/2+2);
+                } else {
+                    // pulsing glow so doors stand out
+                    const pulse = 0.35 + 0.25*Math.sin(performance.now()/350);
+                    ctx.save();
+                    ctx.fillStyle=`rgba(255,220,120,${pulse})`;
+                    ctx.fillRect(sx+3,sy+3,TILE-6,TILE-6);
+                    ctx.restore();
+                    ctx.font=`${TILE-8}px serif`;
+                    ctx.fillText('🚪', sx+TILE/2, sy+TILE/2+2);
+                } }
+        }
+    }
+    // signs
+    signs.forEach(s=>drawEmoji(s.face, s.x, s.y));
+    // npcs
+    npcs.forEach(n=>drawEmoji(n.face, n.x, n.y));
+    // monsters (alive)
+    monsters.filter(m=>m.alive).forEach(m=>{
+        drawEmoji(m.face, m.x, m.y);
+        // tiny difficulty pip
+        const sx=m.x*TILE-camX, sy=m.y*TILE-camY;
+        ctx.font='10px sans-serif'; ctx.fillStyle='rgba(0,0,0,.55)';
+        const dc = m.diff==='easy'?'#68d391':m.diff==='medium'?'#f6e05e':'#fc8181';
+        ctx.fillStyle=dc; ctx.fillRect(sx+TILE-12, sy+2, 9,9);
+    });
+    // collectible items (secret room) with a soft glow
+    items.filter(it=>!it.taken).forEach(it=>{
+        const sx=it.x*TILE-camX, sy=it.y*TILE-camY;
+        const pulse=0.3+0.2*Math.sin(performance.now()/300);
+        ctx.save(); ctx.fillStyle=`rgba(255,255,180,${pulse})`;
+        ctx.beginPath(); ctx.arc(sx+TILE/2, sy+TILE/2, TILE/2-4, 0, 7); ctx.fill(); ctx.restore();
+        drawEmoji(it.icon, it.x, it.y);
+    });
+    // active streak portal (swirling glow)
+    if(G.portal && G.portal.map===G.currentMap){
+        const sx=G.portal.x*TILE-camX, sy=G.portal.y*TILE-camY;
+        const pulse=0.4+0.3*Math.sin(performance.now()/200);
+        ctx.save(); ctx.fillStyle=`rgba(150,90,220,${pulse})`;
+        ctx.beginPath(); ctx.arc(sx+TILE/2, sy+TILE/2, TILE/2-2, 0, 7); ctx.fill(); ctx.restore();
+        drawEmoji('🌀', G.portal.x, G.portal.y);
+    }
+    // player
+    drawEmojiPx(SCIENTISTS[G.member].face, G.pxX, G.pxY);
+
+    requestAnimationFrame(draw);
+}
+function drawEmoji(face, tx, ty){
+    const sx = tx*TILE - camX, sy = ty*TILE - camY;
+    ctx.font = `${TILE-8}px serif`;
+    ctx.fillText(face, sx+TILE/2, sy+TILE/2+2);
+}
+function drawEmojiPx(face, px, py){
+    const sx = px - camX, sy = py - camY;
+    ctx.font = `${TILE-6}px serif`;
+    // little shadow
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    ctx.beginPath(); ctx.ellipse(sx+TILE/2, sy+TILE-4, TILE/3, 5, 0,0,7); ctx.fill();
+    ctx.fillText(face, sx+TILE/2, sy+TILE/2+2);
+}
+
+/* ---------------------------------------------------------------
+   MOVEMENT  (grid-based with smooth tween)
+----------------------------------------------------------------*/
+let moveTween = null;
+function tryMove(dir){
+    if(G.player.moving) return;
+    if(isModalOpen()) return;
+    G.player.dir = dir;
+    const d = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[dir];
+    const nx = G.player.x + d[0], ny = G.player.y + d[1];
+
+    // is there an entity to interact with?
+    const ent = entityAt(nx,ny);
+    if(ent){
+        if(ent.kind==='monster'){ beginBattle(ent.e); return; }
+        if(ent.kind==='npc'){ talk(ent.e); return; }
+        if(ent.kind==='sign'){ talk(ent.e); return; }
+        if(ent.kind==='portal'){ enterSecret(); return; }
+        if(ent.kind==='item'){ pickUpItem(ent.e); /* fall through: walk onto the tile */ }
+    }
+
+    // is the target a door? travel to the linked map (unless locked).
+    const door = doorAt(nx,ny);
+    if(door){
+        if(doorLocked(door)){
+            const need = MAPS[door.lockUntil];
+            const left = (need.monsters||[]).filter(m=>m.alive).length;
+            toast(`🔒 Locked! Defeat all monsters in ${need.name} first (${left} left).`);
+            if(window.soundManager) soundManager.playError && soundManager.playError();
+            return;
+        }
+        travelThroughDoor(door); return;
+    }
+
+    if(isSolid(nx,ny)) return;
+
+    // start tween
+    G.player.moving = true;
+    const fromX=G.pxX, fromY=G.pxY, toX=nx*TILE, toY=ny*TILE;
+    const dur=130; const t0=performance.now();
+    function step(now){
+        let k=Math.min(1,(now-t0)/dur);
+        G.pxX = fromX + (toX-fromX)*k;
+        G.pxY = fromY + (toY-fromY)*k;
+        if(k<1){ requestAnimationFrame(step); }
+        else { G.player.x=nx; G.player.y=ny; G.pxX=toX; G.pxY=toY; G.player.moving=false;
+               if(heldDir) tryMove(heldDir); }
+    }
+    requestAnimationFrame(step);
+}
+
+/* Travel through a door to another map, landing on the door's target tile. */
+function travelThroughDoor(door){
+    heldDir = null;
+    G.player.moving = false;
+    loadMap(door.to);
+    G.player.x = door.tx; G.player.y = door.ty;
+    G.pxX = door.tx*TILE; G.pxY = door.ty*TILE;
+    updateLocationLabel();
+    if(window.soundManager) soundManager.playButtonClick && soundManager.playButtonClick();
+    toast('➜ '+CUR.name);
+    // zone-fit hint: tell the player if this area suits their scientist
+    const focus = CUR.subjectFocus;
+    if(focus){
+        const heroSubs = SCIENTISTS[G.member].subjects;
+        const fits = heroSubs.includes(focus);
+        setTimeout(()=>{
+            if(fits) toast(`🎯 This is your specialty — ${focus} questions here!`);
+            else toast(`⚠️ ${focus} zone — you'll face your own subjects instead.`);
+        }, 1400);
+    }
+}
+
+/* Show the current map's name briefly in the HUD area. */
+function updateLocationLabel(){
+    const el = document.getElementById('hudLoc');
+    if(el) el.textContent = CUR ? CUR.name : '';
+}
+
+/* try to interact with whatever the player faces (A button) */
+function interact(){
+    const d = {up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[G.player.dir];
+    const ent = entityAt(G.player.x+d[0], G.player.y+d[1]);
+    if(!ent) return;
+    if(ent.kind==='monster') beginBattle(ent.e);
+    else talk(ent.e);
+}
+
+/* ---------------------------------------------------------------
+   INPUT
+----------------------------------------------------------------*/
+let heldDir = null;
+const KEYMAP = {ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',
+    w:'up',s:'down',a:'left',d:'right',W:'up',S:'down',A:'left',D:'right'};
+document.addEventListener('keydown', e=>{
+    if(KEYMAP[e.key]){ e.preventDefault(); heldDir=KEYMAP[e.key]; tryMove(heldDir); }
+    if((e.key===' '||e.key==='Enter') && !isModalOpen()){ e.preventDefault(); interact(); }
+});
+document.addEventListener('keyup', e=>{ if(KEYMAP[e.key] && heldDir===KEYMAP[e.key]) heldDir=null; });
+
+/* touch dpad */
+function bindTouch(){
+    document.querySelectorAll('.dpad button').forEach(b=>{
+        const dir=b.dataset.dir;
+        const on=e=>{e.preventDefault(); heldDir=dir; tryMove(dir);};
+        const off=e=>{e.preventDefault(); if(heldDir===dir) heldDir=null;};
+        b.addEventListener('touchstart',on,{passive:false});
+        b.addEventListener('touchend',off,{passive:false});
+        b.addEventListener('mousedown',on);
+        b.addEventListener('mouseup',off);
+        b.addEventListener('mouseleave',off);
+    });
+    const act=document.getElementById('actBtn');
+    act.addEventListener('touchstart',e=>{e.preventDefault(); interact();},{passive:false});
+    act.addEventListener('click',()=>interact());
+}
+// show touch controls if touch device
+function maybeShowTouch(){
+    if('ontouchstart' in window || navigator.maxTouchPoints>0){
+        document.getElementById('touch').classList.add('show');
+    }
+}
+
+/* ---------------------------------------------------------------
+   QUESTION ENGINE  (reuses your questionBank exactly)
+----------------------------------------------------------------*/
+function poolForHero(diff, onlySubject, onlyTopics){
+    const subs = SCIENTISTS[G.member].subjects;
+    let pool=[];
+    subs.forEach(sub=>{
+        if(onlySubject && sub!==onlySubject) return;   // subject filter
+        (G.activeTopics[sub]||[]).forEach(topic=>{
+            if(onlyTopics && !onlyTopics.includes(topic)) return;  // topic-subset filter
+            const arr = (questionBank[sub]&&questionBank[sub][topic])||[];
+            arr.forEach((q,i)=>{
+                if(!diff || q.difficulty===diff){
+                    pool.push({id:`${sub}-${topic}-${i}`, sub, topic, q});
+                }
+            });
+        });
+    });
+    return pool;
+}
+function pickQuestion(diff){
+    const focus = CUR && CUR.subjectFocus;
+    const heroSubs = SCIENTISTS[G.member].subjects;
+    const focusUsable = focus && heroSubs.includes(focus) && (G.activeTopics[focus]||[]).length>0;
+
+    // zone's topic subset (tiered zones) and difficulty bias
+    const zoneTopics = (CUR && ZONE_TOPICS[G.currentMap]) || null;
+    const bias = (CUR && CUR.diffBias) || null;   // 'hard' for tier-2 zones
+    // which difficulty to aim for: monster diff, nudged by the zone bias
+    const targetDiff = (bias==='hard') ? 'hard' : diff;
+
+    const filter = a => a.filter(x=>!G.usedQuestions.has(x.id));
+    const attempts = [];
+    if(focusUsable){
+        // 1. zone subject + zone topics + target difficulty (most specific)
+        attempts.push(()=>filter(poolForHero(targetDiff, focus, zoneTopics)));
+        // 2. zone subject + zone topics, any difficulty
+        attempts.push(()=>filter(poolForHero(null, focus, zoneTopics)));
+        // 3. zone subject (any topic) + requested difficulty
+        attempts.push(()=>filter(poolForHero(diff, focus)));
+        // 4. zone subject, any topic/difficulty
+        attempts.push(()=>filter(poolForHero(null, focus)));
+    }
+    // 5. anything the hero can answer at requested difficulty
+    attempts.push(()=>filter(poolForHero(diff)));
+    // 6. anything at all
+    attempts.push(()=>filter(poolForHero(null)));
+
+    let pool=[];
+    for(const get of attempts){ pool=get(); if(pool.length) break; }
+    if(pool.length===0){ G.usedQuestions.clear(); pool = focusUsable? poolForHero(null,focus):poolForHero(null); }
+    if(pool.length===0) pool = poolForHero(null);
+    if(pool.length===0) return null;
+    const pick = pool[Math.floor(Math.random()*pool.length)];
+    G.usedQuestions.add(pick.id);
+    return pick;
+}
+
+/* ---------------------------------------------------------------
+   BATTLE SYSTEM
+----------------------------------------------------------------*/
+const battleModal = document.getElementById('battleModal');
+function isModalOpen(){
+    return document.querySelector('.modal.active')!==null;
+}
+function beginBattle(monster){
+    if(G.battle) return;
+    if(window.soundManager) soundManager.playBattleStart && soundManager.playBattleStart();
+    // verify hero can answer something
+    if(poolForHero(null).length===0){
+        toast('⚠️ No topics selected for '+SCIENTISTS[G.member].name+'!');
+        return;
+    }
+    G.battle = { monster, locked:false };
+    const sc = SCIENTISTS[G.member];
+    document.getElementById('bHeroFace').textContent = sc.face;
+    document.getElementById('bHeroName').textContent = sc.name;
+    document.getElementById('bFoeFace').textContent = monster.face;
+    document.getElementById('bFoeName').textContent = monster.name;
+    updateBattleBars();
+    battleModal.classList.add('active');
+    nextQuestion();
+}
+function updateBattleBars(){
+    document.getElementById('bHeroHP').style.width = (G.hero.hp/G.hero.maxHP*100)+'%';
+    const m=G.battle.monster;
+    document.getElementById('bFoeHP').style.width = (m.hp/m.maxHP*100)+'%';
+}
+function nextQuestion(){
+    document.getElementById('nextQBtn').style.display='none';
+    document.getElementById('qExplain').classList.remove('show');
+    const m=G.battle.monster;
+    const sel = pickQuestion(m.diff);
+    if(!sel){ toast('No questions available.'); endBattle(false); return; }
+    G.battle.current = sel;
+    G.battle.locked=false;
+    document.getElementById('qMeta').textContent = `${sel.sub} • ${sel.topic} • ${sel.q.difficulty}`;
+    document.getElementById('qText').textContent = sel.q.question;
+    const box=document.getElementById('qAnswers');
+    box.innerHTML='';
+    sel.q.options.forEach((opt,i)=>{
+        const b=document.createElement('button');
+        b.className='ans'; b.textContent=opt;
+        b.onclick=()=>answer(i);
+        box.appendChild(b);
+    });
+}
+function answer(i){
+    if(G.battle.locked) return;
+    G.battle.locked=true;
+    const sel=G.battle.current, m=G.battle.monster;
+    const correct = (i===sel.q.correct);
+    const btns=document.querySelectorAll('#qAnswers .ans');
+    btns.forEach((b,idx)=>{
+        b.disabled=true;
+        if(idx===sel.q.correct) b.classList.add('correct');
+        else if(idx===i) b.classList.add('wrong');
+    });
+    // explanation
+    const ex=document.getElementById('qExplain');
+    ex.textContent = '💡 '+(sel.q.explanation||'');
+    if(sel.q.explanation) ex.classList.add('show');
+
+    // stats
+    G.stats.answered++;
+    const key=`${sel.sub}-${sel.topic}`;
+    if(!G.stats.byTopic[key]) G.stats.byTopic[key]={c:0,t:0};
+    G.stats.byTopic[key].t++;
+
+    if(correct){
+        G.stats.correct++; G.stats.byTopic[key].c++;
+        G.stats.streak++; G.stats.bestStreak=Math.max(G.stats.bestStreak,G.stats.streak);
+        if(window.soundManager) soundManager.playSuccess && soundManager.playSuccess();
+        // streak reward: every STREAK_TARGET correct in a row opens a secret portal
+        if(G.stats.streak>0 && G.stats.streak%STREAK_TARGET===0 && !G.portal){
+            G.portalPending = true;   // spawn once the battle ends and we're back in the world
+        }
+        // damage scales with hero level + strength bonus + bought power
+        let dmg = 12 + G.hero.level*2 + (G.hero.power||0)*4;
+        if(m.type===SCIENTISTS[G.member].strongVs){ dmg=Math.round(dmg*1.6); }
+        if(G.stats.streak>=3) dmg+=5;
+        m.hp=Math.max(0,m.hp-dmg);
+        toast(`✅ Correct! ${dmg} damage`);
+    } else {
+        G.stats.streak=0;
+        if(window.soundManager) soundManager.playError && soundManager.playError();
+        // wrong-answer damage scales with question difficulty:
+        // easy stings, hard really bites. Plus a small random spread.
+        const base = {easy:8, medium:16, hard:26}[sel.q.difficulty] || 12;
+        const hit = base + Math.round(Math.random()*6);
+        G.hero.hp=Math.max(0,G.hero.hp-hit);
+        const sev = sel.q.difficulty==='hard' ? '💥 ' : '';
+        toast(`${sev}❌ Wrong! You take ${hit} damage`);
+    }
+    updateBattleBars(); updateHUD();
+
+    if(m.hp<=0){ setTimeout(()=>winBattle(),700); return; }
+    if(G.hero.hp<=0){ setTimeout(()=>loseBattle(),700); return; }
+    document.getElementById('nextQBtn').style.display='inline-block';
+}
+function awardXP(xp){
+    G.hero.xp += xp;
+    let leveled=false;
+    while(G.hero.xp >= G.hero.level*100){
+        G.hero.xp -= G.hero.level*100;
+        G.hero.level++;
+        G.hero.maxHP += 20; G.hero.hp = G.hero.maxHP;
+        leveled=true;
+    }
+    updateHUD();
+    if(leveled){
+        setTimeout(()=>{ toast(`🌟 Level up! Now level ${G.hero.level}`);
+            if(window.soundManager) soundManager.playLevelUp && soundManager.playLevelUp(); }, 800);
+    }
+    return leveled;
+}
+function winBattle(){
+    const m=G.battle.monster;
+    m.alive=false;
+    G.stats.battlesWon++;
+    const xp = 20 + (m.diff==='hard'?30:m.diff==='medium'?15:5);
+    const gold = 10 + (m.diff==='hard'?25:m.diff==='medium'?12:5);
+    G.hero.gold+=gold;
+    if(window.soundManager) soundManager.playVictory && soundManager.playVictory();
+    endBattle(true);
+    toast(`🏆 Defeated ${m.name}! +${xp} XP, +${gold} gold`);
+    awardXP(xp);
+    checkAllCleared();
+    autoSave();
+}
+function loseBattle(){
+    endBattle(false);
+    if(G.hero.shield){
+        G.hero.shield=false;
+        G.hero.hp=Math.round(G.hero.maxHP*0.6);
+        toast('🛡️ Your Guardian Charm shattered and saved you!');
+    } else {
+        G.hero.hp=Math.round(G.hero.maxHP*0.5);
+        toast('💫 You were knocked out! Revived at half HP.');
+    }
+    updateHUD();
+}
+function endBattle(won){
+    battleModal.classList.remove('active');
+    G.battle=null;
+    updateHUD();
+    // if a streak earned a portal during this battle, spawn it now in the world
+    if(G.portalPending){
+        G.portalPending = false;
+        setTimeout(()=>spawnPortal(), 600);
+    }
+}
+function checkAllCleared(){
+    let allDead = true, total = 0, dead = 0;
+    for(const id in MAPS){
+        (MAPS[id].monsters||[]).forEach(m=>{ total++; if(!m.alive) dead++; else allDead=false; });
+    }
+    if(allDead && total>0){
+        setTimeout(()=>showDlg('🏅','World Cleared!',
+            `Outstanding work, ${SCIENTISTS[G.member].name}! Every monster across the whole Academy world has been defeated (${dead}/${total}). Final stats — Level ${G.hero.level}, ${G.stats.correct}/${G.stats.answered} correct, best streak ${G.stats.bestStreak}, ${G.hero.gold} gold. Refresh to play again with new topics or a different scientist.`),900);
+    }
+}
+
+/* ---------------------------------------------------------------
+   DIALOGUE
+----------------------------------------------------------------*/
+function talk(ent){
+    if(ent.shop){ openShop(); return; }
+    showDlg(ent.face, ent.name, ent.text);
+}
+function showDlg(face,name,text){
+    document.getElementById('dlgFace').textContent=face;
+    document.getElementById('dlgName').textContent=name;
+    document.getElementById('dlgText').textContent=text;
+    document.getElementById('dlgModal').classList.add('active');
+    if(window.soundManager) soundManager.playButtonClick && soundManager.playButtonClick();
+}
+function closeDlg(){ document.getElementById('dlgModal').classList.remove('active'); }
+
+/* ---------------------------------------------------------------
+   SHOP
+----------------------------------------------------------------*/
+const SHOP_ITEMS = [
+    {id:'heal',  icon:'🧪', name:'Health Potion',  cost:30,
+     desc:'Restore HP to full.',
+     can:()=> G.hero.hp < G.hero.maxHP,
+     why:'Already at full HP.',
+     buy:()=>{ G.hero.hp = G.hero.maxHP; }},
+    {id:'maxhp', icon:'❤️', name:'Vitality Boost', cost:60,
+     desc:'Permanently +25 max HP (and heal).',
+     can:()=> true,
+     buy:()=>{ G.hero.maxHP += 25; G.hero.hp = G.hero.maxHP; }},
+    {id:'xp',    icon:'⭐', name:'Wisdom Scroll',   cost:50,
+     desc:'Gain 50 XP instantly.',
+     can:()=> true,
+     buy:()=>{ awardXP(50); }},
+    {id:'power', icon:'⚔️', name:'Power Crystal',   cost:80,
+     desc:'+1 attack level (more battle damage).',
+     can:()=> true,
+     buy:()=>{ G.hero.power = (G.hero.power||0) + 1; }},
+    {id:'revive',icon:'🛡️', name:'Guardian Charm',  cost:40,
+     desc:'Stops your next knock-out (one-time shield).',
+     can:()=> !G.hero.shield,
+     why:'You already hold a charm.',
+     buy:()=>{ G.hero.shield = true; }}
+];
+
+function openShop(){
+    if(window.soundManager) soundManager.playButtonClick && soundManager.playButtonClick();
+    renderShop();
+    document.getElementById('shopModal').classList.add('active');
+}
+function renderShop(){
+    document.getElementById('shopGold').textContent = G.hero.gold;
+    const box = document.getElementById('shopItems');
+    box.innerHTML = '';
+    SHOP_ITEMS.forEach(it=>{
+        const affordable = G.hero.gold >= it.cost;
+        const allowed = it.can ? it.can() : true;
+        const row = document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:10px;background:var(--panel2);border-radius:10px;padding:10px;margin:6px 0;';
+        row.innerHTML = `
+            <span style="font-size:1.6em;">${it.icon}</span>
+            <div style="flex:1;text-align:left;">
+                <div style="font-weight:700;">${it.name} <span style="color:var(--gold);font-weight:600;">💰${it.cost}</span></div>
+                <div style="color:var(--muted);font-size:.82em;">${it.desc}</div>
+            </div>`;
+        const btn=document.createElement('button');
+        btn.className='btn small';
+        if(!allowed){ btn.textContent='—'; btn.disabled=true; btn.title=it.why||''; btn.classList.add('ghost'); }
+        else if(!affordable){ btn.textContent='Need 💰'; btn.disabled=true; btn.classList.add('ghost'); }
+        else { btn.textContent='Buy'; btn.onclick=()=>buyItem(it.id); }
+        row.appendChild(btn);
+        box.appendChild(row);
+    });
+}
+function buyItem(id){
+    const it = SHOP_ITEMS.find(i=>i.id===id);
+    if(!it) return;
+    if(G.hero.gold < it.cost){ toast('Not enough gold.'); return; }
+    if(it.can && !it.can()){ toast(it.why||'Cannot buy that now.'); return; }
+    G.hero.gold -= it.cost;
+    it.buy();
+    if(window.soundManager) soundManager.playSuccess && soundManager.playSuccess();
+    toast(`✅ Bought ${it.name}!`);
+    updateHUD();
+    renderShop();
+    autoSave();
+}
+function closeShop(){ document.getElementById('shopModal').classList.remove('active'); }
+
+/* ---- Trophy gallery ---- */
+function openGallery(){
+    const grid = document.getElementById('galleryGrid');
+    grid.innerHTML = '';
+    TROPHIES.forEach(t=>{
+        const found = G.collection.includes(t.id);
+        const cell = document.createElement('div');
+        cell.style.cssText = `background:var(--panel2);border-radius:10px;padding:10px 6px;text-align:center;
+            ${found?'':'opacity:.35;filter:grayscale(1);'}`;
+        cell.innerHTML = `<div style="font-size:1.8em;">${found?t.icon:'❔'}</div>
+            <div style="font-size:.72em;color:var(--muted);margin-top:3px;">${found?t.name:'???'}</div>`;
+        grid.appendChild(cell);
+    });
+    document.getElementById('galleryCount').textContent =
+        `${G.collection.length} of ${TROPHIES.length} found` +
+        (G.collection.length===TROPHIES.length ? ' — complete! 🎉' : '');
+    document.getElementById('galleryModal').classList.add('active');
+    if(window.soundManager) soundManager.playButtonClick && soundManager.playButtonClick();
+}
+function closeGallery(){ document.getElementById('galleryModal').classList.remove('active'); }
+
+/* ---------------------------------------------------------------
+   HUD / DASHBOARD
+----------------------------------------------------------------*/
+function updateHUD(){
+    const sc=SCIENTISTS[G.member];
+    document.getElementById('hudFace').textContent=sc.face;
+    // write the name node without destroying the #hudLoc span
+    const nameEl=document.getElementById('hudName');
+    nameEl.childNodes[0].nodeValue = sc.name;
+    document.getElementById('hudHP').style.width=(G.hero.hp/G.hero.maxHP*100)+'%';
+    document.getElementById('hudXP').style.width=(G.hero.xp/(G.hero.level*100)*100)+'%';
+    document.getElementById('hudLvl').textContent=G.hero.level;
+    document.getElementById('hudGold').textContent=G.hero.gold;
+    // buff icons: ⚔️ per power level, 🛡️ if shield held
+    let buffs='';
+    if(G.hero.power>0) buffs += '⚔️'.repeat(Math.min(G.hero.power,3));
+    if(G.hero.shield) buffs += '🛡️';
+    const bEl=document.getElementById('hudBuffs');
+    if(bEl){ bEl.textContent=buffs; bEl.title = (G.hero.power>0?`+${G.hero.power} attack `:'')+(G.hero.shield?'• shield ready':''); }
+    updateLocationLabel();
+}
+function openDashboard(){
+    const acc = G.stats.answered? Math.round(G.stats.correct/G.stats.answered*100):0;
+    let rows='';
+    const keys=Object.keys(G.stats.byTopic).sort();
+    if(keys.length===0) rows='<p style="color:var(--muted)">Answer some questions to see topic breakdown.</p>';
+    keys.forEach(k=>{
+        const o=G.stats.byTopic[k]; const a=Math.round(o.c/o.t*100);
+        const col = a>=70?'#48bb78':a>=50?'#ecc94b':'#fc8181';
+        rows+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2b3346;">
+            <span style="text-transform:capitalize">${k.replace('-',' • ')}</span>
+            <span style="color:${col};font-weight:700">${o.c}/${o.t} (${a}%)</span></div>`;
+    });
+    // per-zone clear progress
+    let zoneRows='';
+    const zoneOrder=['forest','lab','factory'];
+    zoneOrder.forEach(id=>{
+        const m=MAPS[id]; const tot=(m.monsters||[]).length;
+        const dead=(m.monsters||[]).filter(x=>!x.alive).length;
+        const done = tot>0 && dead===tot;
+        const col = done?'#48bb78':dead>0?'#ecc94b':'var(--muted)';
+        zoneRows+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #2b3346;">
+            <span>${m.name}</span>
+            <span style="color:${col};font-weight:700">${dead}/${tot}${done?' ✓':''}</span></div>`;
+    });
+    document.getElementById('dashBody').innerHTML=`
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px;">
+            <div style="background:var(--panel2);border-radius:10px;padding:10px;text-align:center;">
+                <div style="font-size:1.6em;font-weight:700">${G.stats.answered}</div><div style="color:var(--muted);font-size:.8em">Answered</div></div>
+            <div style="background:var(--panel2);border-radius:10px;padding:10px;text-align:center;">
+                <div style="font-size:1.6em;font-weight:700;color:var(--good)">${acc}%</div><div style="color:var(--muted);font-size:.8em">Accuracy</div></div>
+            <div style="background:var(--panel2);border-radius:10px;padding:10px;text-align:center;">
+                <div style="font-size:1.6em;font-weight:700;color:var(--gold)">${G.stats.bestStreak}</div><div style="color:var(--muted);font-size:.8em">Best streak</div></div>
+            <div style="background:var(--panel2);border-radius:10px;padding:10px;text-align:center;">
+                <div style="font-size:1.6em;font-weight:700">${G.stats.battlesWon}</div><div style="color:var(--muted);font-size:.8em">Monsters beaten</div></div>
+        </div>
+        <h3 style="margin:.3em 0">Zone progress</h3>${zoneRows}
+        <h3 style="margin:.6em 0 .3em">By topic</h3>${rows}`;
+    document.getElementById('dashModal').classList.add('active');
+}
+function closeDashboard(){ document.getElementById('dashModal').classList.remove('active'); }
+
+function toggleMute(){
+    G.muted=!G.muted;
+    if(window.soundManager){ soundManager.isMuted=G.muted; }
+    document.getElementById('muteBtn').textContent=G.muted?'🔇':'🔊';
+}
+
+/* ---------------------------------------------------------------
+   TOAST
+----------------------------------------------------------------*/
+let toastTimer=null;
+function toast(msg){
+    const t=document.getElementById('toast');
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+/* ---------------------------------------------------------------
+   SCREEN FLOW
+----------------------------------------------------------------*/
+function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+// --- title: character cards ---
+function buildCharPick(){
+    const wrap=document.getElementById('charPick');
+    wrap.innerHTML='';
+    Object.entries(SCIENTISTS).forEach(([key,sc])=>{
+        const div=document.createElement('div');
+        div.className='char-card'+(key===G.member?' sel':'');
+        div.innerHTML=`<div class="face">${sc.face}</div><div class="nm">${sc.name}</div>
+            <div class="sub">${sc.subjects.join(' + ')}</div>`;
+        div.onclick=()=>{ G.member=key;
+            document.querySelectorAll('.char-card').forEach(c=>c.classList.remove('sel'));
+            div.classList.add('sel'); };
+        wrap.appendChild(div);
+    });
+}
+
+// --- topic screen ---
+function buildTopicScreen(){
+    const wrap=document.getElementById('topicBlocks');
+    wrap.innerHTML='';
+    Object.entries(TOPIC_LIST).forEach(([sub,topics])=>{
+        const block=document.createElement('div');
+        block.className='subj-block';
+        block.innerHTML=`<h3>${SUBJ_ICON[sub]} ${sub.charAt(0).toUpperCase()+sub.slice(1)}</h3>`;
+        const grid=document.createElement('div'); grid.className='topic-grid';
+        topics.forEach(([id,label])=>{
+            const chip=document.createElement('div');
+            chip.className='topic-chip';
+            chip.innerHTML=`<span class="tick"></span><span>${label}</span>`;
+            chip.onclick=()=>{
+                const arr=G.activeTopics[sub];
+                const idx=arr.indexOf(id);
+                if(idx>=0){ arr.splice(idx,1); chip.classList.remove('on'); }
+                else { arr.push(id); chip.classList.add('on'); }
+                refreshTopicCount();
+            };
+            chip.dataset.sub=sub; chip.dataset.id=id;
+            grid.appendChild(chip);
+        });
+        block.appendChild(grid);
+        wrap.appendChild(block);
+    });
+}
+function refreshTopicCount(){
+    const n=Object.values(G.activeTopics).reduce((a,b)=>a+b.length,0);
+    document.getElementById('topicCount').textContent=`${n} topic${n===1?'':'s'} selected`;
+    document.getElementById('startBtn').disabled = (n===0);
+}
+function preset(kind){
+    Object.keys(G.activeTopics).forEach(s=>G.activeTopics[s]=[]);
+    if(kind==='all'){ Object.entries(TOPIC_LIST).forEach(([s,t])=>G.activeTopics[s]=t.map(x=>x[0])); }
+    else if(kind!=='none'){ G.activeTopics[kind]=TOPIC_LIST[kind].map(x=>x[0]); }
+    // reflect in UI
+    document.querySelectorAll('.topic-chip').forEach(chip=>{
+        const on=G.activeTopics[chip.dataset.sub].includes(chip.dataset.id);
+        chip.classList.toggle('on',on);
+    });
+    refreshTopicCount();
+}
+
+function goToTopics(){ show('topicScreen'); }
+
+function startWorld(){
+    normaliseMaps();
+    resetAllMaps();
+    // fresh game: clear collectibles and portal state
+    G.collection = [];
+    G.secretsFound = 0;
+    G.portal = null; G.portalPending = false;
+    enterWorld(false);
+}
+/* Enter the world screen. If resuming, map/monster state is already restored
+   by applySave(), so we must NOT reset it again. */
+function enterWorld(isResume){
+    loadMap('hub');
+    // place player in hub courtyard centre
+    G.player.x=10; G.player.y=8; G.player.dir='down';
+    G.pxX=G.player.x*TILE; G.pxY=G.player.y*TILE;
+    show('worldScreen');
+    resizeCanvas();
+    updateHUD();
+    updateLocationLabel();
+    maybeShowTouch();
+    setTimeout(()=>{document.getElementById('hint').style.opacity='0';},6000);
+    if(isResume){
+        setTimeout(()=>toast(`▶ Welcome back, ${SCIENTISTS[G.member].name}! Level ${G.hero.level}.`), 1000);
+    } else {
+        const homeZone = {physicist:'⚙️ Factory (physics)', chemist:'🧪 Lab (chemistry)', biologist:'🌲 Forest (biology)'}[G.member];
+        setTimeout(()=>toast(`👋 Tip: the ${homeZone} is your strongest area!`), 1200);
+    }
+    requestAnimationFrame(draw);
+}
+
+/* Resume from the browser auto-save backup (title-screen button). */
+function resumeAutoSave(){
+    const code = loadAutoSave();
+    if(!code){ toast('No saved game found.'); return; }
+    try {
+        applySave(decodeSave(code));
+        enterWorld(true);
+    } catch(e){
+        toast('Saved game could not be read — starting fresh.');
+    }
+}
+function dismissResume(){ document.getElementById('resumeBanner').style.display='none'; }
+
+/* Paste a code from the title screen (opens the save modal's load box). */
+function openLoadFromTitle(){
+    // We need the world objects ready for applySave; normalise maps first.
+    normaliseMaps();
+    document.getElementById('saveCode').value = '(enter the world first to generate your own code)';
+    document.getElementById('loadMsg').textContent = '';
+    document.getElementById('loadCode').value = '';
+    document.getElementById('saveModal').classList.add('active');
+}
+
+/* ---------------------------------------------------------------
+   BOOT
+----------------------------------------------------------------*/
+function checkDB(){
+    if(typeof questionBank==='undefined'){
+        alert('Question database not found. Make sure questions.js is in the same folder and you are using a local server or web host.');
+        return false;
+    }
+    return true;
+}
+window.addEventListener('DOMContentLoaded', ()=>{
+    checkDB();
+    buildCharPick();
+    buildTopicScreen();
+    bindTouch();
+    refreshTopicCount();
+    // offer to resume a browser auto-save, if present and readable
+    const saved = loadAutoSave();
+    if(saved){
+        try {
+            const data = decodeSave(saved);
+            const sci = (SCIENTISTS[data.member]||{}).name || data.member;
+            const beaten = Object.values(data.cleared||{}).reduce((a,b)=>a+b.length,0);
+            document.getElementById('resumeText').innerHTML =
+                `Saved game found on this computer:<br><b>${sci}</b> — Level ${data.hero.level}, ${data.hero.gold} gold, ${beaten} monsters beaten.`;
+            document.getElementById('resumeBanner').style.display='block';
+        } catch(e){ /* corrupt backup — ignore */ }
+    }
+});
+</script>
+</body>
+</html>
